@@ -5,6 +5,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const [isSelecting, setIsSelecting] = useState(false);
   const [selection, setSelection] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [formData, setFormData] = useState({
     productNumber: '',
     unit: packagingUnits[0] || '카톤',
@@ -18,16 +19,27 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (image && imageRef.current) {
+    console.log('GalleryScreen: image prop received:', image ? '이미지 있음' : '이미지 없음');
+    
+    if (image && canvasRef.current) {
       const img = new Image();
+      
       img.onload = () => {
+        console.log('이미지 로드 완료:', img.width, 'x', img.height);
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         
         // 캔버스 크기를 컨테이너에 맞춤
         const container = containerRef.current;
+        if (!container) {
+          console.error('컨테이너를 찾을 수 없습니다');
+          return;
+        }
+        
         const containerWidth = container.clientWidth;
         const containerHeight = container.clientHeight;
+        
+        console.log('컨테이너 크기:', containerWidth, 'x', containerHeight);
         
         const imgAspectRatio = img.width / img.height;
         const containerAspectRatio = containerWidth / containerHeight;
@@ -42,13 +54,30 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           canvasWidth = containerHeight * imgAspectRatio;
         }
         
+        console.log('캔버스 크기 설정:', canvasWidth, 'x', canvasHeight);
+        
         canvas.width = canvasWidth;
         canvas.height = canvasHeight;
         
+        // 캔버스 초기화
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        
         // 이미지를 캔버스에 그리기
         ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+        
+        setImageLoaded(true);
+        console.log('이미지가 캔버스에 그려졌습니다');
       };
+      
+      img.onerror = (error) => {
+        console.error('이미지 로드 실패:', error);
+        alert('이미지를 로드할 수 없습니다. 다시 촬영해주세요.');
+      };
+      
       img.src = image;
+    } else {
+      console.log('이미지 또는 캔버스가 없습니다');
+      setImageLoaded(false);
     }
   }, [image]);
 
@@ -203,9 +232,26 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           style={{
             maxWidth: '100%',
             maxHeight: '100%',
-            cursor: isSelecting ? 'crosshair' : 'pointer'
+            cursor: isSelecting ? 'crosshair' : 'pointer',
+            border: '1px solid #ccc',
+            backgroundColor: '#f0f0f0'
           }}
         />
+        
+        {/* 이미지 로딩 상태 표시 */}
+        {!imageLoaded && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            color: 'white',
+            textAlign: 'center'
+          }}>
+            <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
+            <p>이미지를 로드하고 있습니다...</p>
+          </div>
+        )}
         
         {/* 선택 영역 표시 */}
         {selection && (

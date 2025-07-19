@@ -160,13 +160,19 @@ const CameraScreen = ({ onImageCaptured }) => {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
+      console.log('촬영된 이미지 크기:', video.videoWidth, 'x', video.videoHeight);
+
       // 비디오 프레임을 캔버스에 그리기
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       // 캔버스를 이미지로 변환
       const imageSrc = canvas.toDataURL('image/jpeg', 0.8);
+      console.log('이미지 캡처 완료, 데이터 URL 길이:', imageSrc.length);
+      
       setCapturedImage(imageSrc);
       setIsCameraActive(false);
+    } else {
+      console.error('비디오 또는 캔버스 참조가 없습니다');
     }
   }, []);
 
