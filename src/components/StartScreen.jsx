@@ -1,6 +1,43 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const StartScreen = ({ onStart }) => {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallButton, setShowInstallButton] = useState(false);
+
+  useEffect(() => {
+    // PWA 설치 이벤트 리스너
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallButton(true);
+    };
+
+    // 앱이 이미 설치되었는지 확인
+    const handleAppInstalled = () => {
+      setShowInstallButton(false);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setShowInstallButton(false);
+      }
+    }
+  };
+
   return (
     <div style={{
       height: '100vh',
@@ -9,7 +46,8 @@ const StartScreen = ({ onStart }) => {
       justifyContent: 'center',
       alignItems: 'center',
       padding: '20px',
-      backgroundColor: '#f8f9fa'
+      backgroundColor: '#f8f9fa',
+      position: 'relative'
     }}>
       <div style={{
         textAlign: 'center',
@@ -66,6 +104,32 @@ const StartScreen = ({ onStart }) => {
           </ol>
         </div>
       </div>
+
+      {/* 앱 설치 버튼 */}
+      {showInstallButton && (
+        <div style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          right: '20px'
+        }}>
+          <button
+            onClick={handleInstallApp}
+            className="btn btn-success"
+            style={{
+              width: '100%',
+              fontSize: '16px',
+              padding: '12px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            📱 앱 설치하기
+          </button>
+        </div>
+      )}
     </div>
   );
 };

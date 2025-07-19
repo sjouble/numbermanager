@@ -203,7 +203,6 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     if (!canvasRef.current) return;
     
     const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
     
     // 가이드 라인 영역 (화면 중앙 200x80 영역)
     const guideWidth = 200;
@@ -224,7 +223,10 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       endY: startY + guideHeight
     });
     
-    setShowZoomedArea(true);
+    // 가이드 영역을 자동으로 OCR 실행
+    setTimeout(() => {
+      performOCR();
+    }, 500);
   };
 
   return (
@@ -232,29 +234,28 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       height: '100vh',
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: '#000'
+      backgroundColor: '#000',
+      position: 'relative'
     }}>
       {/* 헤더 */}
       <div style={{
         padding: '16px',
         backgroundColor: '#333',
         color: 'white',
-        textAlign: 'center'
+        textAlign: 'center',
+        zIndex: 20
       }}>
         <h2>품번 영역 선택</h2>
-        <p style={{ fontSize: '14px', marginTop: '4px', marginBottom: '12px' }}>
-          품번이 있는 영역을 드래그하여 선택하거나 가이드 영역을 사용하세요
-        </p>
         <button
           onClick={selectGuideArea}
           className="btn btn-primary"
-          style={{ fontSize: '14px', padding: '8px 16px' }}
+          style={{ fontSize: '14px', padding: '8px 16px', marginTop: '8px' }}
         >
           가이드 영역 자동 선택
         </button>
       </div>
 
-      {/* 이미지 영역 */}
+      {/* 전체 이미지 영역 */}
       <div 
         ref={containerRef}
         style={{
@@ -304,11 +305,45 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               top: Math.min(selection.startY, selection.endY),
               width: Math.abs(selection.endX - selection.startX),
               height: Math.abs(selection.endY - selection.startY),
-              border: '2px solid #00ff00',
-              backgroundColor: 'rgba(0, 255, 0, 0.2)',
-              pointerEvents: 'none'
+              border: '3px solid #00ff00',
+              backgroundColor: 'rgba(0, 255, 0, 0.3)',
+              pointerEvents: 'none',
+              boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)'
             }}
           />
+        )}
+
+        {/* 가이드 영역 하이라이트 */}
+        {!selection && imageLoaded && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '200px',
+              height: '80px',
+              border: '2px dashed #00ff00',
+              backgroundColor: 'rgba(0, 255, 0, 0.1)',
+              pointerEvents: 'none',
+              opacity: 0.7
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: '-25px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              color: '#00ff00',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              padding: '2px 6px',
+              borderRadius: '3px'
+            }}>
+              가이드 영역
+            </div>
+          </div>
         )}
         
         {/* 확대된 영역 표시 */}
@@ -403,33 +438,54 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         )}
       </div>
 
-      {/* 입력 폼 */}
+      {/* 플로팅 입력 폼 */}
       <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px',
+        right: '20px',
         backgroundColor: 'white',
-        padding: '20px',
-        borderTopLeftRadius: '20px',
-        borderTopRightRadius: '20px'
+        padding: '16px',
+        borderRadius: '16px',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+        zIndex: 30
       }}>
-        <div className="input-group">
-          <label>품번</label>
+        {/* 품번 */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+          <label style={{ width: '60px', fontSize: '14px', fontWeight: '600', color: '#333' }}>품번</label>
           <input
             type="text"
             value={formData.productNumber}
             onChange={(e) => handleInputChange('productNumber', e.target.value)}
             placeholder="품번을 입력하거나 영역을 선택하세요"
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              border: '2px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
           />
-          {recognizedText && (
-            <small style={{ color: '#666', marginTop: '4px', display: 'block' }}>
-              인식된 텍스트: {recognizedText}
-            </small>
-          )}
         </div>
+        {recognizedText && (
+          <small style={{ color: '#666', marginBottom: '12px', display: 'block', fontSize: '12px' }}>
+            인식된 텍스트: {recognizedText}
+          </small>
+        )}
 
-        <div className="input-group">
-          <label>포장단위</label>
+        {/* 포장단위 */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+          <label style={{ width: '60px', fontSize: '14px', fontWeight: '600', color: '#333' }}>단위</label>
           <select
             value={formData.unit}
             onChange={(e) => handleInputChange('unit', e.target.value)}
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              border: '2px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
           >
             {packagingUnits.map(unit => (
               <option key={unit} value={unit}>{unit}</option>
@@ -437,37 +493,52 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           </select>
         </div>
 
-        <div className="input-group">
-          <label>수량</label>
+        {/* 수량 */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+          <label style={{ width: '60px', fontSize: '14px', fontWeight: '600', color: '#333' }}>수량</label>
           <input
             type="number"
             value={formData.quantity}
             onChange={(e) => handleInputChange('quantity', e.target.value)}
             placeholder="수량을 입력하세요"
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              border: '2px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
           />
         </div>
 
-        <div className="input-group">
-          <label>유통기한 (선택사항)</label>
+        {/* 유통기한 */}
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+          <label style={{ width: '60px', fontSize: '14px', fontWeight: '600', color: '#333' }}>유통기한</label>
           <input
             type="text"
             value={formData.expiryDate}
             onChange={(e) => handleInputChange('expiryDate', e.target.value)}
-            placeholder="YYYYMMDD 형식 (예: 20251201)"
+            placeholder="YYYYMMDD (선택)"
             maxLength="8"
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              border: '2px solid #ddd',
+              borderRadius: '6px',
+              fontSize: '14px'
+            }}
           />
         </div>
 
         {/* 버튼 영역 */}
         <div style={{
           display: 'flex',
-          gap: '12px',
-          marginTop: '20px'
+          gap: '12px'
         }}>
           <button
             onClick={handleRetake}
             className="btn btn-secondary"
-            style={{ flex: 1 }}
+            style={{ flex: 1, padding: '10px' }}
           >
             다시 촬영
           </button>
@@ -475,7 +546,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           <button
             onClick={handleSubmit}
             className="btn btn-success"
-            style={{ flex: 1 }}
+            style={{ flex: 1, padding: '10px' }}
             disabled={isProcessing}
           >
             입력

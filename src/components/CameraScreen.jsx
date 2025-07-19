@@ -481,7 +481,8 @@ const CameraScreen = ({ onImageCaptured }) => {
               border: '3px solid #00ff00',
               borderRadius: '8px',
               pointerEvents: 'none',
-              zIndex: 5
+              zIndex: 10,
+              boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)'
             }}>
               <div style={{
                 position: 'absolute',
@@ -492,9 +493,10 @@ const CameraScreen = ({ onImageCaptured }) => {
                 fontSize: '14px',
                 fontWeight: 'bold',
                 textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-                backgroundColor: 'rgba(0,0,0,0.7)',
+                backgroundColor: 'rgba(0,0,0,0.8)',
                 padding: '4px 8px',
-                borderRadius: '4px'
+                borderRadius: '4px',
+                whiteSpace: 'nowrap'
               }}>
                 품번 영역
               </div>
