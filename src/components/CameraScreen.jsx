@@ -468,6 +468,38 @@ const CameraScreen = ({ onImageCaptured }) => {
               제품을 촬영하세요
             </div>
           )}
+
+          {/* 가이드 라인 */}
+          {hasPermission && !cameraError && !isLoading && (
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '200px',
+              height: '80px',
+              border: '3px solid #00ff00',
+              borderRadius: '8px',
+              pointerEvents: 'none',
+              zIndex: 5
+            }}>
+              <div style={{
+                position: 'absolute',
+                top: '-30px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                color: '#00ff00',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                padding: '4px 8px',
+                borderRadius: '4px'
+              }}>
+                품번 영역
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{

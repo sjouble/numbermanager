@@ -6,6 +6,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const [selection, setSelection] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [showZoomedArea, setShowZoomedArea] = useState(false);
   const [formData, setFormData] = useState({
     productNumber: '',
     unit: packagingUnits[0] || '카톤',
@@ -85,8 +86,14 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     if (!isSelecting) {
       setIsSelecting(true);
       const rect = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
+      
+      // 확대된 영역에서는 좌표를 조정
+      if (showZoomedArea) {
+        x = x / 2;
+        y = y / 2;
+      }
       
       setSelection({
         startX: x,
@@ -192,6 +199,34 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     onBackToCamera();
   };
 
+  const selectGuideArea = () => {
+    if (!canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    // 가이드 라인 영역 (화면 중앙 200x80 영역)
+    const guideWidth = 200;
+    const guideHeight = 80;
+    
+    // 캔버스에서의 가이드 영역 위치 계산
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    
+    // 화면 중앙을 기준으로 가이드 영역 계산
+    const startX = (canvasWidth - guideWidth) / 2;
+    const startY = (canvasHeight - guideHeight) / 2;
+    
+    setSelection({
+      startX: startX,
+      startY: startY,
+      endX: startX + guideWidth,
+      endY: startY + guideHeight
+    });
+    
+    setShowZoomedArea(true);
+  };
+
   return (
     <div style={{
       height: '100vh',
@@ -207,9 +242,16 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         textAlign: 'center'
       }}>
         <h2>품번 영역 선택</h2>
-        <p style={{ fontSize: '14px', marginTop: '4px' }}>
-          품번이 있는 영역을 드래그하여 선택하세요
+        <p style={{ fontSize: '14px', marginTop: '4px', marginBottom: '12px' }}>
+          품번이 있는 영역을 드래그하여 선택하거나 가이드 영역을 사용하세요
         </p>
+        <button
+          onClick={selectGuideArea}
+          className="btn btn-primary"
+          style={{ fontSize: '14px', padding: '8px 16px' }}
+        >
+          가이드 영역 자동 선택
+        </button>
       </div>
 
       {/* 이미지 영역 */}
@@ -254,7 +296,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         )}
         
         {/* 선택 영역 표시 */}
-        {selection && (
+        {selection && !showZoomedArea && (
           <div
             style={{
               position: 'absolute',
@@ -267,6 +309,76 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               pointerEvents: 'none'
             }}
           />
+        )}
+        
+        {/* 확대된 영역 표시 */}
+        {showZoomedArea && selection && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10
+          }}>
+            <div style={{
+              position: 'relative',
+              width: '80%',
+              height: '60%',
+              border: '3px solid #00ff00',
+              borderRadius: '8px',
+              overflow: 'hidden'
+            }}>
+              <canvas
+                ref={canvasRef}
+                onClick={handleImageClick}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  transform: 'scale(2)',
+                  transformOrigin: 'center',
+                  cursor: isSelecting ? 'crosshair' : 'pointer'
+                }}
+              />
+              <div style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                color: '#00ff00',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                padding: '4px 8px',
+                borderRadius: '4px'
+              }}>
+                2배 확대된 품번 영역
+              </div>
+              <button
+                onClick={() => setShowZoomedArea(false)}
+                style={{
+                  position: 'absolute',
+                  top: '10px',
+                  right: '10px',
+                  background: 'rgba(255,255,255,0.9)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '30px',
+                  height: '30px',
+                  fontSize: '16px',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
         )}
         
         {/* 로딩 오버레이 */}
