@@ -7,7 +7,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const [isProcessing, setIsProcessing] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [showZoomedArea, setShowZoomedArea] = useState(false);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(2.5);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -25,6 +25,11 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
 
   useEffect(() => {
     console.log('GalleryScreen: image prop received:', image ? '이미지 있음' : '이미지 없음');
+    
+    // 이미지가 로드되면 자동으로 선택 모드 활성화
+    if (image) {
+      setIsSelecting(true);
+    }
     
     if (image && canvasRef.current) {
       const img = new Image();
@@ -203,35 +208,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     onBackToCamera();
   };
 
-  const selectGuideArea = () => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    
-    // 가이드 라인 영역 (화면 중앙 200x80 영역)
-    const guideWidth = 200;
-    const guideHeight = 80;
-    
-    // 캔버스에서의 가이드 영역 위치 계산
-    const canvasWidth = canvas.width;
-    const canvasHeight = canvas.height;
-    
-    // 화면 중앙을 기준으로 가이드 영역 계산
-    const startX = (canvasWidth - guideWidth) / 2;
-    const startY = (canvasHeight - guideHeight) / 2;
-    
-    setSelection({
-      startX: startX,
-      startY: startY,
-      endX: startX + guideWidth,
-      endY: startY + guideHeight
-    });
-    
-    // 가이드 영역을 자동으로 OCR 실행
-    setTimeout(() => {
-      performOCR();
-    }, 500);
-  };
+  // 가이드 영역 자동 선택 함수 제거 (수동 선택만 사용)
 
   // 터치 이벤트 핸들러
   const handleTouchStart = (e) => {
@@ -275,7 +252,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       
       if (this.lastDistance) {
         const scaleChange = distance / this.lastDistance;
-        setScale(prev => Math.min(Math.max(prev * scaleChange, 0.5), 3));
+        setScale(prev => Math.min(Math.max(prev * scaleChange, 0.5), 5));
       }
       
       this.lastDistance = distance;
@@ -313,9 +290,9 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       setIsDragging(false);
       this.lastDistance = null;
       
-      // 선택 모드에서 터치가 끝나면 OCR 실행
+      // 선택 모드에서 터치가 끝나면 선택 완료 (OCR은 버튼으로 실행)
       if (isSelecting && selection) {
-        performOCR();
+        console.log('영역 선택 완료:', selection);
       }
     }
   };
@@ -323,11 +300,11 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const handleWheel = (e) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale(prev => Math.min(Math.max(prev * delta, 0.5), 3));
+    setScale(prev => Math.min(Math.max(prev * delta, 0.5), 5));
   };
 
   const resetView = () => {
-    setScale(1);
+    setScale(2.5);
     setPan({ x: 0, y: 0 });
   };
 
@@ -348,6 +325,9 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         zIndex: 20
       }}>
         <h2>품번 영역 선택</h2>
+        <p style={{ fontSize: '14px', marginTop: '4px', marginBottom: '12px', opacity: 0.8 }}>
+          이미지에서 품번 영역을 드래그하여 선택하세요
+        </p>
         <div style={{
           display: 'flex',
           gap: '8px',
@@ -356,17 +336,11 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           flexWrap: 'wrap'
         }}>
           <button
-            onClick={selectGuideArea}
-            className="btn btn-primary"
-            style={{ fontSize: '14px', padding: '8px 16px' }}
-          >
-            가이드 영역 자동 선택
-          </button>
-          <button
             onClick={() => {
               setSelection(null);
               setRecognizedText('');
               setFormData(prev => ({ ...prev, productNumber: '' }));
+              setIsSelecting(true);
             }}
             className="btn btn-secondary"
             style={{ fontSize: '14px', padding: '8px 16px' }}
@@ -374,18 +348,17 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
             다시 선택
           </button>
           <button
-            onClick={resetView}
-            className="btn btn-secondary"
+            onClick={() => {
+              if (selection) {
+                performOCR();
+              } else {
+                alert('먼저 품번 영역을 선택해주세요.');
+              }
+            }}
+            className="btn btn-success"
             style={{ fontSize: '14px', padding: '8px 16px' }}
           >
-            화면 초기화
-          </button>
-          <button
-            onClick={() => setIsSelecting(!isSelecting)}
-            className={isSelecting ? "btn btn-success" : "btn btn-secondary"}
-            style={{ fontSize: '14px', padding: '8px 16px' }}
-          >
-            {isSelecting ? '선택 모드 ON' : '선택 모드 OFF'}
+            선택 확인
           </button>
         </div>
       </div>
@@ -462,38 +435,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           />
         )}
 
-        {/* 가이드 영역 하이라이트 */}
-        {!selection && imageLoaded && (
-          <div
-            style={{
-              position: 'absolute',
-              left: '50%',
-              top: '30%',
-              transform: 'translate(-50%, -50%)',
-              width: '200px',
-              height: '80px',
-              border: '2px dashed #00ff00',
-              backgroundColor: 'rgba(0, 255, 0, 0.1)',
-              pointerEvents: 'none',
-              opacity: 0.7
-            }}
-          >
-            <div style={{
-              position: 'absolute',
-              top: '-25px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              color: '#00ff00',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              padding: '2px 6px',
-              borderRadius: '3px'
-            }}>
-              가이드 영역
-            </div>
-          </div>
-        )}
+        {/* 가이드 영역 하이라이트 제거 (수동 선택만 사용) */}
         
         {/* 확대된 영역 표시 */}
         {showZoomedArea && selection && (
@@ -565,6 +507,25 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           </div>
         )}
         
+        {/* 선택 모드 인디케이터 */}
+        {isSelecting && !selection && (
+          <div style={{
+            position: 'absolute',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(0, 123, 255, 0.9)',
+            color: 'white',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            zIndex: 15
+          }}>
+            ✋ 영역을 드래그하여 선택하세요
+          </div>
+        )}
+
         {/* 로딩 오버레이 */}
         {isProcessing && (
           <div style={{

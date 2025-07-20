@@ -11,11 +11,13 @@ const StartScreen = ({ onStart }) => {
     const checkPWAEnvironment = () => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isInApp = window.navigator.standalone === true;
-      setIsPWA(isStandalone || isInApp);
+      const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+      setIsPWA(isStandalone || isInApp || isFullscreen);
       
       console.log('PWA 환경 확인:', {
         isStandalone,
         isInApp,
+        isFullscreen,
         userAgent: navigator.userAgent,
         protocol: window.location.protocol,
         hostname: window.location.hostname
@@ -107,11 +109,21 @@ const StartScreen = ({ onStart }) => {
     const isAndroid = /Android/.test(navigator.userAgent);
     
     if (isIOS) {
-      alert('iOS에서 설치하려면:\n1. Safari 브라우저에서 열기\n2. 공유 버튼(□) 클릭\n3. "홈 화면에 추가" 선택');
+      alert('iOS에서 설치하려면:\n1. Safari 브라우저에서 열기\n2. 공유 버튼(□) 클릭\n3. "홈 화면에 추가" 선택\n4. 앱 실행 시 전체화면 모드로 실행됩니다');
     } else if (isAndroid) {
-      alert('Android에서 설치하려면:\n1. Chrome 브라우저에서 열기\n2. 메뉴(⋮) 클릭\n3. "홈 화면에 추가" 선택');
+      alert('Android에서 설치하려면:\n1. Chrome 브라우저에서 열기\n2. 메뉴(⋮) 클릭\n3. "홈 화면에 추가" 선택\n4. 앱 실행 시 전체화면 모드로 실행됩니다');
     } else {
-      alert('데스크톱에서 설치하려면:\n1. 주소창 옆의 설치 아이콘 클릭\n2. 또는 F12 → Application → Manifest에서 설치');
+      alert('데스크톱에서 설치하려면:\n1. 주소창 옆의 설치 아이콘 클릭\n2. 또는 F12 → Application → Manifest에서 설치\n3. 앱 실행 시 전체화면 모드로 실행됩니다');
+    }
+  };
+
+  const requestFullscreen = () => {
+    if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen();
+    } else if (document.documentElement.webkitRequestFullscreen) {
+      document.documentElement.webkitRequestFullscreen();
+    } else if (document.documentElement.msRequestFullscreen) {
+      document.documentElement.msRequestFullscreen();
     }
   };
 
@@ -248,6 +260,32 @@ const StartScreen = ({ onStart }) => {
             }}
           >
             📱 수동 설치 가이드
+          </button>
+        </div>
+      )}
+
+      {/* 전체화면 모드 버튼 */}
+      {!isPWA && (
+        <div style={{
+          position: 'absolute',
+          bottom: '140px',
+          left: '20px',
+          right: '20px'
+        }}>
+          <button
+            onClick={requestFullscreen}
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              fontSize: '14px',
+              padding: '10px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            🖥️ 전체화면 모드
           </button>
         </div>
       )}
