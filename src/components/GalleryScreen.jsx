@@ -16,56 +16,11 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
   const containerRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const startPointRef = useRef(null);
 
   useEffect(() => {
     console.log('GalleryScreen: image prop received:', image ? '이미지 있음' : '이미지 없음');
-    
-    // 이미지가 로드되면 자동으로 선택 모드 활성화
-    if (image) {
-      setIsSelecting(true);
-    }
-    
-    // 전역 마우스 이벤트 리스너 추가
-    const handleGlobalMouseMove = (e) => {
-      if (isSelecting && selection) {
-        const rect = canvasRef.current?.getBoundingClientRect();
-        const canvas = canvasRef.current;
-        
-        if (!rect || !canvas) return;
-        
-        // 마우스 좌표를 캔버스 좌표로 변환 (1:1 매칭)
-        let x = (e.clientX - rect.left);
-        let y = (e.clientY - rect.top);
-        
-        // 캔버스 크기에 맞게 정규화
-        x = (x / rect.width) * canvas.width;
-        y = (y / rect.height) * canvas.height;
-        
-        // 경계 제한
-        x = Math.max(0, Math.min(x, canvas.width));
-        y = Math.max(0, Math.min(y, canvas.height));
-        
-        console.log('전역 마우스 이동:', { x, y, selection });
-        
-        setSelection({
-          ...selection,
-          endX: x,
-          endY: y
-        });
-      }
-    };
-
-    const handleGlobalMouseUp = async () => {
-      console.log('전역 마우스 업:', { isSelecting, selection });
-      if (isSelecting && selection) {
-        setIsSelecting(false);
-        await performOCR();
-      }
-    };
-
-    // 전역 이벤트 리스너 등록
-    document.addEventListener('mousemove', handleGlobalMouseMove);
-    document.addEventListener('mouseup', handleGlobalMouseUp);
     
     if (image && canvasRef.current) {
       const img = new Image();
@@ -112,6 +67,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
         
         setImageLoaded(true);
+        setIsSelecting(true); // 이미지 로드 완료 후 선택 모드 활성화
         console.log('이미지가 캔버스에 그려졌습니다');
       };
       
@@ -125,82 +81,114 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       console.log('이미지 또는 캔버스가 없습니다');
       setImageLoaded(false);
     }
+  }, [image]);
 
-    // cleanup 함수
+  // 전역 마우스 이벤트 리스너
+  useEffect(() => {
+    const handleGlobalMouseMove = (e) => {
+      if (isDraggingRef.current) {
+        handleMouseMove(e);
+      }
+    };
+
+    const handleGlobalMouseUp = (e) => {
+      if (isDraggingRef.current) {
+        handleMouseUp(e);
+      }
+    };
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+
     return () => {
       document.removeEventListener('mousemove', handleGlobalMouseMove);
       document.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [image, isSelecting, selection]);
+  }, []);
 
-  const handleImageClick = (e) => {
-    console.log('이미지 클릭:', { isSelecting });
+  // 좌표 변환 함수
+  const getCanvasCoordinates = (clientX, clientY) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const canvas = canvasRef.current;
     
-    if (!isSelecting) {
-      setIsSelecting(true);
-      const rect = canvasRef.current.getBoundingClientRect();
-      const canvas = canvasRef.current;
-      
-      // 클릭 좌표를 캔버스 좌표로 변환 (1:1 매칭)
-      let x = (e.clientX - rect.left);
-      let y = (e.clientY - rect.top);
-      
-      // 캔버스 크기에 맞게 정규화
-      x = (x / rect.width) * canvas.width;
-      y = (y / rect.height) * canvas.height;
-      
-      // 경계 제한
-      x = Math.max(0, Math.min(x, canvas.width));
-      y = Math.max(0, Math.min(y, canvas.height));
-      
-      console.log('클릭 좌표 변환:', {
-        clientX: e.clientX, clientY: e.clientY,
-        rectLeft: rect.left, rectTop: rect.top,
-        rectWidth: rect.width, rectHeight: rect.height,
-        canvasWidth: canvas.width, canvasHeight: canvas.height,
-        finalX: x, finalY: y
-      });
-      
-      setSelection({
-        startX: x,
-        startY: y,
-        endX: x,
-        endY: y
-      });
+    if (!rect || !canvas) {
+      console.log('캔버스 정보를 가져올 수 없음');
+      return null;
     }
+    
+    // 화면 좌표를 캔버스 좌표로 변환
+    let x = (clientX - rect.left);
+    let y = (clientY - rect.top);
+    
+    // 캔버스 크기에 맞게 정규화
+    x = (x / rect.width) * canvas.width;
+    y = (y / rect.height) * canvas.height;
+    
+    // 경계 제한
+    x = Math.max(0, Math.min(x, canvas.width));
+    y = Math.max(0, Math.min(y, canvas.height));
+    
+    return { x, y };
   };
 
+  // 마우스 다운 이벤트
+  const handleMouseDown = (e) => {
+    console.log('마우스 다운:', { isSelecting });
+    
+    if (!isSelecting) return;
+    
+    const coords = getCanvasCoordinates(e.clientX, e.clientY);
+    if (!coords) return;
+    
+    console.log('시작 좌표:', coords);
+    
+    isDraggingRef.current = true;
+    startPointRef.current = coords;
+    
+    setSelection({
+      startX: coords.x,
+      startY: coords.y,
+      endX: coords.x,
+      endY: coords.y
+    });
+  };
+
+  // 마우스 이동 이벤트
   const handleMouseMove = (e) => {
-    if (isSelecting && selection) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const canvas = canvasRef.current;
-      
-      // 마우스 좌표를 캔버스 좌표로 변환 (1:1 매칭)
-      let x = (e.clientX - rect.left);
-      let y = (e.clientY - rect.top);
-      
-      // 캔버스 크기에 맞게 정규화
-      x = (x / rect.width) * canvas.width;
-      y = (y / rect.height) * canvas.height;
-      
-      // 경계 제한
-      x = Math.max(0, Math.min(x, canvas.width));
-      y = Math.max(0, Math.min(y, canvas.height));
-      
-      console.log('마우스 이동:', { x, y, selection });
-      
-      setSelection({
-        ...selection,
-        endX: x,
-        endY: y
-      });
-    }
+    if (!isDraggingRef.current || !startPointRef.current) return;
+    
+    const coords = getCanvasCoordinates(e.clientX, e.clientY);
+    if (!coords) return;
+    
+    console.log('드래그 중:', coords);
+    
+    setSelection({
+      startX: startPointRef.current.x,
+      startY: startPointRef.current.y,
+      endX: coords.x,
+      endY: coords.y
+    });
   };
 
-  const handleMouseUp = async () => {
-    console.log('마우스 업:', { isSelecting, selection });
-    if (isSelecting && selection) {
-      setIsSelecting(false);
+  // 마우스 업 이벤트
+  const handleMouseUp = async (e) => {
+    console.log('마우스 업:', { isDragging: isDraggingRef.current, selection });
+    
+    if (isDraggingRef.current && selection) {
+      isDraggingRef.current = false;
+      startPointRef.current = null;
+      
+      // 최소 크기 확인
+      const width = Math.abs(selection.endX - selection.startX);
+      const height = Math.abs(selection.endY - selection.startY);
+      
+      if (width < 10 || height < 10) {
+        console.log('선택 영역이 너무 작음');
+        setSelection(null);
+        return;
+      }
+      
+      console.log('선택 완료:', selection);
       await performOCR();
     }
   };
@@ -422,6 +410,8 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               setRecognizedText('');
               setFormData(prev => ({ ...prev, productNumber: '' }));
               setIsSelecting(true);
+              isDraggingRef.current = false;
+              startPointRef.current = null;
             }}
             className="btn btn-secondary"
             style={{ fontSize: '14px', padding: '8px 16px' }}
@@ -467,13 +457,14 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         }}>
           <canvas
             ref={canvasRef}
-            onClick={handleImageClick}
+            onMouseDown={handleMouseDown}
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
               cursor: isSelecting ? 'crosshair' : 'pointer',
               border: '1px solid #ccc',
-              backgroundColor: '#f0f0f0'
+              backgroundColor: '#f0f0f0',
+              userSelect: 'none'
             }}
           />
           
@@ -481,30 +472,13 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           {selection && (() => {
             const rect = canvasRef.current?.getBoundingClientRect();
             const canvas = canvasRef.current;
-            if (!rect || !canvas) {
-              console.log('선택 영역 표시 실패: rect 또는 canvas가 없음');
-              return null;
-            }
+            if (!rect || !canvas) return null;
             
-            console.log('선택 영역 표시:', {
-              selection,
-              rect: { width: rect.width, height: rect.height },
-              canvas: { width: canvas.width, height: canvas.height }
-            });
-            
-            // 캔버스 좌표를 화면 좌표로 변환 (1:1 매칭)
+            // 캔버스 좌표를 화면 좌표로 변환
             const displayX = Math.min(selection.startX, selection.endX) * (rect.width / canvas.width);
             const displayY = Math.min(selection.startY, selection.endY) * (rect.height / canvas.height);
             const displayWidth = Math.abs(selection.endX - selection.startX) * (rect.width / canvas.width);
             const displayHeight = Math.abs(selection.endY - selection.startY) * (rect.height / canvas.height);
-            
-            console.log('변환된 좌표:', {
-              displayX, displayY, displayWidth, displayHeight
-            });
-            
-            // 최소 크기 보장
-            const minWidth = Math.max(displayWidth, 10);
-            const minHeight = Math.max(displayHeight, 10);
             
             return (
               <div
@@ -512,8 +486,8 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
                   position: 'absolute',
                   left: displayX,
                   top: displayY,
-                  width: minWidth,
-                  height: minHeight,
+                  width: displayWidth,
+                  height: displayHeight,
                   border: '3px solid #00ff00',
                   backgroundColor: 'rgba(0, 255, 0, 0.3)',
                   pointerEvents: 'none',
@@ -534,7 +508,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
                   borderRadius: '3px',
                   whiteSpace: 'nowrap'
                 }}>
-                  {Math.round(Math.abs(selection.endX - selection.startX))} x {Math.round(Math.abs(selection.endY - selection.startY))}
+                  {Math.round(displayWidth)} x {Math.round(displayHeight)}
                 </div>
               </div>
             );
@@ -568,8 +542,9 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           fontSize: '12px',
           zIndex: 20
         }}>
-          isSelecting: {isSelecting ? 'true' : 'false'}<br/>
-          selection: {selection ? `${Math.round(selection.startX)},${Math.round(selection.startY)} → ${Math.round(selection.endX)},${Math.round(selection.endY)}` : 'null'}
+          선택모드: {isSelecting ? 'ON' : 'OFF'}<br/>
+          드래그: {isDraggingRef.current ? 'ON' : 'OFF'}<br/>
+          선택영역: {selection ? '있음' : '없음'}
         </div>
 
         {/* 선택 모드 인디케이터 */}
