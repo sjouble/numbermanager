@@ -95,14 +95,21 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     if (!isSelecting) {
       setIsSelecting(true);
       const rect = canvasRef.current.getBoundingClientRect();
-      let x = e.clientX - rect.left;
-      let y = e.clientY - rect.top;
+      const canvas = canvasRef.current;
       
-      // 확대된 영역에서는 좌표를 조정
-      if (showZoomedArea) {
-        x = x / 2;
-        y = y / 2;
-      }
+      // 캔버스의 실제 크기와 표시 크기 비율 계산
+      const displayWidth = rect.width;
+      const displayHeight = rect.height;
+      const actualWidth = canvas.width;
+      const actualHeight = canvas.height;
+      
+      // 클릭 좌표를 캔버스 좌표로 변환
+      let x = (e.clientX - rect.left) / displayWidth * actualWidth;
+      let y = (e.clientY - rect.top) / displayHeight * actualHeight;
+      
+      // 확대/이동 적용
+      x = (x - pan.x) / scale;
+      y = (y - pan.y) / scale;
       
       setSelection({
         startX: x,
@@ -116,8 +123,21 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const handleMouseMove = (e) => {
     if (isSelecting && selection) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const canvas = canvasRef.current;
+      
+      // 캔버스의 실제 크기와 표시 크기 비율 계산
+      const displayWidth = rect.width;
+      const displayHeight = rect.height;
+      const actualWidth = canvas.width;
+      const actualHeight = canvas.height;
+      
+      // 마우스 좌표를 캔버스 좌표로 변환
+      let x = (e.clientX - rect.left) / displayWidth * actualWidth;
+      let y = (e.clientY - rect.top) / displayHeight * actualHeight;
+      
+      // 확대/이동 적용
+      x = (x - pan.x) / scale;
+      y = (y - pan.y) / scale;
       
       setSelection({
         ...selection,
@@ -215,8 +235,21 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       const rect = canvasRef.current.getBoundingClientRect();
-      const x = (touch.clientX - rect.left - pan.x) / scale;
-      const y = (touch.clientY - rect.top - pan.y) / scale;
+      
+      // 캔버스의 실제 크기와 표시 크기 비율 계산
+      const canvas = canvasRef.current;
+      const displayWidth = rect.width;
+      const displayHeight = rect.height;
+      const actualWidth = canvas.width;
+      const actualHeight = canvas.height;
+      
+      // 터치 좌표를 캔버스 좌표로 변환
+      let x = (touch.clientX - rect.left) / displayWidth * actualWidth;
+      let y = (touch.clientY - rect.top) / displayHeight * actualHeight;
+      
+      // 확대/이동 적용
+      x = (x - pan.x) / scale;
+      y = (y - pan.y) / scale;
       
       // 선택 모드인 경우 선택 영역 시작
       if (isSelecting) {
@@ -262,8 +295,20 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       
       if (isSelecting && selection) {
         // 선택 영역 업데이트
-        const x = (touch.clientX - rect.left - pan.x) / scale;
-        const y = (touch.clientY - rect.top - pan.y) / scale;
+        // 캔버스의 실제 크기와 표시 크기 비율 계산
+        const canvas = canvasRef.current;
+        const displayWidth = rect.width;
+        const displayHeight = rect.height;
+        const actualWidth = canvas.width;
+        const actualHeight = canvas.height;
+        
+        // 터치 좌표를 캔버스 좌표로 변환
+        let x = (touch.clientX - rect.left) / displayWidth * actualWidth;
+        let y = (touch.clientY - rect.top) / displayHeight * actualHeight;
+        
+        // 확대/이동 적용
+        x = (x - pan.x) / scale;
+        y = (y - pan.y) / scale;
         
         setSelection({
           ...selection,
@@ -430,9 +475,26 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               border: '3px solid #00ff00',
               backgroundColor: 'rgba(0, 255, 0, 0.3)',
               pointerEvents: 'none',
-              boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)'
+              boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)',
+              zIndex: 5
             }}
-          />
+          >
+            {/* 선택 영역 크기 표시 */}
+            <div style={{
+              position: 'absolute',
+              top: '-25px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              color: '#00ff00',
+              fontSize: '12px',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              whiteSpace: 'nowrap'
+            }}>
+              {Math.round(Math.abs(selection.endX - selection.startX))} x {Math.round(Math.abs(selection.endY - selection.startY))}
+            </div>
+          </div>
         )}
 
         {/* 가이드 영역 하이라이트 제거 (수동 선택만 사용) */}

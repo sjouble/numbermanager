@@ -5,6 +5,7 @@ const StartScreen = ({ onStart }) => {
   const [showInstallButton, setShowInstallButton] = useState(false);
   const [isPWA, setIsPWA] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
+  const [installStatus, setInstallStatus] = useState('');
 
   useEffect(() => {
     // PWA 환경 확인
@@ -12,15 +13,18 @@ const StartScreen = ({ onStart }) => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isInApp = window.navigator.standalone === true;
       const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
-      setIsPWA(isStandalone || isInApp || isFullscreen);
+      const isMinimal = window.matchMedia('(display-mode: minimal-ui)').matches;
+      setIsPWA(isStandalone || isInApp || isFullscreen || isMinimal);
       
       console.log('PWA 환경 확인:', {
         isStandalone,
         isInApp,
         isFullscreen,
+        isMinimal,
         userAgent: navigator.userAgent,
         protocol: window.location.protocol,
-        hostname: window.location.hostname
+        hostname: window.location.hostname,
+        pathname: window.location.pathname
       });
     };
 
@@ -28,18 +32,19 @@ const StartScreen = ({ onStart }) => {
 
     // PWA 설치 이벤트 리스너
     const handleBeforeInstallPrompt = (e) => {
-      console.log('beforeinstallprompt 이벤트 발생');
+      console.log('beforeinstallprompt 이벤트 발생:', e);
       e.preventDefault();
       setDeferredPrompt(e);
       setShowInstallButton(true);
       setDebugInfo('설치 가능: beforeinstallprompt 이벤트 수신됨');
+      setInstallStatus('ready');
     };
 
     // 앱이 이미 설치되었는지 확인
     const handleAppInstalled = () => {
       console.log('앱 설치됨');
-      // 설치 후에도 버튼을 계속 표시 (재설치 가능하도록)
       setDebugInfo('앱이 설치되었습니다. 재설치도 가능합니다.');
+      setInstallStatus('installed');
     };
 
     // 매니페스트 확인
@@ -49,10 +54,19 @@ const StartScreen = ({ onStart }) => {
         if (response.ok) {
           const manifest = await response.json();
           console.log('매니페스트 로드 성공:', manifest);
-          setDebugInfo('매니페스트 로드 성공');
+          
+          // 매니페스트 유효성 검사
+          const requiredFields = ['name', 'short_name', 'start_url', 'display'];
+          const missingFields = requiredFields.filter(field => !manifest[field]);
+          
+          if (missingFields.length > 0) {
+            setDebugInfo(`매니페스트 누락 필드: ${missingFields.join(', ')}`);
+          } else {
+            setDebugInfo('매니페스트 로드 성공 - 설치 준비 완료');
+          }
         } else {
           console.error('매니페스트 로드 실패:', response.status);
-          setDebugInfo('매니페스트 로드 실패');
+          setDebugInfo(`매니페스트 로드 실패: ${response.status}`);
         }
       } catch (error) {
         console.error('매니페스트 확인 오류:', error);
@@ -65,13 +79,14 @@ const StartScreen = ({ onStart }) => {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // 디버깅: 3초 후에도 설치 버튼이 안 보이면 수동 옵션 제공
+    // 디버깅: 5초 후에도 설치 버튼이 안 보이면 수동 옵션 제공
     const timer = setTimeout(() => {
       if (!showInstallButton && !isPWA) {
         console.log('설치 버튼이 표시되지 않음 - 수동 옵션 제공');
         setDebugInfo('자동 설치가 불가능합니다. 수동 설치를 시도해보세요.');
+        setInstallStatus('manual');
       }
-    }, 3000);
+    }, 5000);
 
     // 항상 설치 버튼 표시 (PWA 환경에서도 재설치 가능하도록)
     setShowInstallButton(true);
@@ -84,21 +99,29 @@ const StartScreen = ({ onStart }) => {
   }, [showInstallButton, isPWA]);
 
   const handleInstallApp = async () => {
+    console.log('설치 버튼 클릭됨');
+    
     if (deferredPrompt) {
       try {
+        console.log('deferredPrompt 사용하여 설치 시작');
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         console.log('설치 결과:', outcome);
+        
         if (outcome === 'accepted') {
           setDebugInfo('앱 설치가 시작되었습니다');
+          setInstallStatus('installing');
         } else {
           setDebugInfo('설치가 취소되었습니다');
+          setInstallStatus('cancelled');
         }
       } catch (error) {
         console.error('설치 오류:', error);
         setDebugInfo('설치 중 오류가 발생했습니다');
+        setInstallStatus('error');
       }
     } else {
+      console.log('deferredPrompt 없음 - 수동 설치 가이드 표시');
       // deferredPrompt가 없는 경우 수동 설치 가이드 표시
       handleManualInstall();
     }
@@ -107,14 +130,22 @@ const StartScreen = ({ onStart }) => {
   const handleManualInstall = () => {
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
+    const isChrome = /Chrome/.test(navigator.userAgent);
+    const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
     
-    if (isIOS) {
-      alert('iOS에서 설치하려면:\n1. Safari 브라우저에서 열기\n2. 공유 버튼(□) 클릭\n3. "홈 화면에 추가" 선택\n4. 앱 실행 시 전체화면 모드로 실행됩니다');
+    let message = '';
+    
+    if (isIOS && isSafari) {
+      message = 'iOS Safari에서 설치하려면:\n\n1. Safari 브라우저에서 열기\n2. 하단 공유 버튼(□) 클릭\n3. "홈 화면에 추가" 선택\n4. "추가" 버튼 클릭\n\n설치 후 홈 화면에서 앱 아이콘을 터치하면 전체화면 모드로 실행됩니다.';
+    } else if (isAndroid && isChrome) {
+      message = 'Android Chrome에서 설치하려면:\n\n1. Chrome 브라우저에서 열기\n2. 주소창 옆 메뉴(⋮) 클릭\n3. "홈 화면에 추가" 선택\n4. "추가" 버튼 클릭\n\n설치 후 홈 화면에서 앱 아이콘을 터치하면 전체화면 모드로 실행됩니다.';
     } else if (isAndroid) {
-      alert('Android에서 설치하려면:\n1. Chrome 브라우저에서 열기\n2. 메뉴(⋮) 클릭\n3. "홈 화면에 추가" 선택\n4. 앱 실행 시 전체화면 모드로 실행됩니다');
+      message = 'Android에서 설치하려면:\n\n1. Chrome 브라우저에서 열기\n2. 주소창 옆 메뉴(⋮) 클릭\n3. "홈 화면에 추가" 선택\n4. "추가" 버튼 클릭\n\n설치 후 홈 화면에서 앱 아이콘을 터치하면 전체화면 모드로 실행됩니다.';
     } else {
-      alert('데스크톱에서 설치하려면:\n1. 주소창 옆의 설치 아이콘 클릭\n2. 또는 F12 → Application → Manifest에서 설치\n3. 앱 실행 시 전체화면 모드로 실행됩니다');
+      message = '데스크톱에서 설치하려면:\n\n1. Chrome/Edge 브라우저에서 열기\n2. 주소창 옆의 설치 아이콘(📱) 클릭\n3. "설치" 버튼 클릭\n\n또는 F12 → Application → Manifest에서 설치할 수 있습니다.';
     }
+    
+    alert(message);
   };
 
   const requestFullscreen = () => {
@@ -209,6 +240,7 @@ const StartScreen = ({ onStart }) => {
           zIndex: 100
         }}>
           {debugInfo}
+          {installStatus && ` (${installStatus})`}
         </div>
       )}
 

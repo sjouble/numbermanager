@@ -6,6 +6,20 @@ import ListScreen from './components/ListScreen';
 import UnitEditor from './components/UnitEditor';
 
 function App() {
+  // 서비스 워커 등록
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('서비스 워커 등록 성공:', registration);
+          })
+          .catch((error) => {
+            console.log('서비스 워커 등록 실패:', error);
+          });
+      });
+    }
+  }, []);
   const [currentScreen, setCurrentScreen] = useState('start');
   const [capturedImage, setCapturedImage] = useState(null);
   const [itemList, setItemList] = useState([]);
