@@ -97,15 +97,19 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 클릭 좌표를 캔버스 좌표로 변환
-      let x = (e.clientX - rect.left) / rect.width * canvas.width;
-      let y = (e.clientY - rect.top) / rect.height * canvas.height;
+      // 1. 클릭 좌표를 화면 기준으로 변환
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
       
-      // 확대/이동 효과 제거
+      // 2. 확대/이동 효과를 제거하여 실제 캔버스 좌표 계산
       x = (x - pan.x) / scale;
       y = (y - pan.y) / scale;
       
-      // 경계 제한
+      // 3. 캔버스 크기에 맞게 정규화
+      x = (x / rect.width) * canvas.width;
+      y = (y / rect.height) * canvas.height;
+      
+      // 4. 경계 제한
       x = Math.max(0, Math.min(x, canvas.width));
       y = Math.max(0, Math.min(y, canvas.height));
       
@@ -123,15 +127,19 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 마우스 좌표를 캔버스 좌표로 변환
-      let x = (e.clientX - rect.left) / rect.width * canvas.width;
-      let y = (e.clientY - rect.top) / rect.height * canvas.height;
+      // 1. 마우스 좌표를 화면 기준으로 변환
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
       
-      // 확대/이동 효과 제거
+      // 2. 확대/이동 효과를 제거하여 실제 캔버스 좌표 계산
       x = (x - pan.x) / scale;
       y = (y - pan.y) / scale;
       
-      // 경계 제한
+      // 3. 캔버스 크기에 맞게 정규화
+      x = (x / rect.width) * canvas.width;
+      y = (y / rect.height) * canvas.height;
+      
+      // 4. 경계 제한
       x = Math.max(0, Math.min(x, canvas.width));
       y = Math.max(0, Math.min(y, canvas.height));
       
@@ -158,7 +166,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     try {
       const canvas = canvasRef.current;
       
-      // 선택 영역 계산
+      // 선택 영역 계산 (정확한 좌표)
       const startX = Math.max(0, Math.min(selection.startX, selection.endX));
       const startY = Math.max(0, Math.min(selection.startY, selection.endY));
       const endX = Math.min(canvas.width, Math.max(selection.startX, selection.endX));
@@ -166,56 +174,88 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const width = endX - startX;
       const height = endY - startY;
       
-      // 최소 크기 보장
-      const finalWidth = Math.max(width, 50);
-      const finalHeight = Math.max(height, 20);
+      console.log('OCR 영역:', { startX, startY, endX, endY, width, height });
       
-      // 선택 영역을 새로운 캔버스에 복사 (2배 해상도)
+      // 최소 크기 보장
+      const finalWidth = Math.max(width, 30);
+      const finalHeight = Math.max(height, 15);
+      
+      // 선택 영역을 새로운 캔버스에 복사 (3배 해상도로 증가)
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = finalWidth * 2;
-      tempCanvas.height = finalHeight * 2;
+      tempCanvas.width = finalWidth * 3;
+      tempCanvas.height = finalHeight * 3;
       const tempCtx = tempCanvas.getContext('2d');
       
+      // 이미지 스무딩 비활성화로 선명도 향상
       tempCtx.imageSmoothingEnabled = false;
+      
+      // 선택 영역을 고해상도로 복사
       tempCtx.drawImage(
         canvas,
         startX, startY, finalWidth, finalHeight,
-        0, 0, finalWidth * 2, finalHeight * 2
+        0, 0, finalWidth * 3, finalHeight * 3
       );
       
-      // 대비 향상
+      // 이미지 전처리: 대비 향상 및 노이즈 제거
       const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
       const data = imageData.data;
       
+      // 그레이스케일 변환 및 대비 향상
       for (let i = 0; i < data.length; i += 4) {
-        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        const enhanced = Math.max(0, Math.min(255, (gray - 128) * 1.5 + 128));
-        data[i] = enhanced;
-        data[i + 1] = enhanced;
-        data[i + 2] = enhanced;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // 그레이스케일 변환
+        const gray = r * 0.299 + g * 0.587 + b * 0.114;
+        
+        // 대비 향상 (더 강한 대비)
+        const enhanced = Math.max(0, Math.min(255, (gray - 128) * 2.0 + 128));
+        
+        // 이진화 (흑백으로 변환)
+        const binary = enhanced > 128 ? 255 : 0;
+        
+        data[i] = binary;     // R
+        data[i + 1] = binary; // G
+        data[i + 2] = binary; // B
+        // Alpha는 그대로 유지
       }
       
       tempCtx.putImageData(imageData, 0, 0);
       
-      // OCR 실행
+      // OCR 워커 생성 및 실행
       const worker = await createWorker('kor+eng');
+      
+      // OCR 설정 최적화
       await worker.setParameters({
         tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허기니디리미비시이지치키티피히구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐',
-        tessedit_pageseg_mode: '7',
-        tessedit_ocr_engine_mode: '3'
+        tessedit_pageseg_mode: '7', // 단일 텍스트 라인
+        tessedit_ocr_engine_mode: '3', // 기본 OCR 엔진
+        preserve_interword_spaces: '1',
+        tessedit_do_invert: '0' // 이미지 반전 비활성화
       });
       
       const { data: { text } } = await worker.recognize(tempCanvas);
       
+      console.log('OCR 원본 텍스트:', text);
+      
       // 텍스트 정제 및 숫자 추출
-      let cleanedText = text.replace(/[^\w가-힣]/g, '');
+      let cleanedText = text.replace(/[^\w가-힣]/g, ''); // 특수문자 제거
       const numbers = cleanedText.match(/\d+/g);
+      const letters = cleanedText.match(/[A-Za-z가-힣]+/g);
       
       let recognizedNumber = '';
       if (numbers && numbers.length > 0) {
+        // 가장 긴 숫자 조합 선택
         recognizedNumber = numbers.reduce((longest, current) => 
           current.length > longest.length ? current : longest, '');
+      } else if (letters && letters.length > 0) {
+        // 숫자가 없으면 알파벳/한글 조합 사용
+        recognizedNumber = letters.join('');
       }
+      
+      console.log('정제된 텍스트:', cleanedText);
+      console.log('인식된 품번:', recognizedNumber);
       
       setRecognizedText(text);
       setFormData(prev => ({
@@ -264,17 +304,31 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 터치 좌표를 캔버스 좌표로 변환
-      let x = (touch.clientX - rect.left) / rect.width * canvas.width;
-      let y = (touch.clientY - rect.top) / rect.height * canvas.height;
+      // 1. 터치 좌표를 화면 기준으로 변환
+      let x = touch.clientX - rect.left;
+      let y = touch.clientY - rect.top;
       
-      // 확대/이동 효과 제거
+      // 2. 확대/이동 효과를 제거하여 실제 캔버스 좌표 계산
+      // 캔버스의 CSS transform: scale(2.5) translate(pan.x/scale, pan.y/scale)
       x = (x - pan.x) / scale;
       y = (y - pan.y) / scale;
       
-      // 경계 제한
+      // 3. 캔버스 크기에 맞게 정규화
+      x = (x / rect.width) * canvas.width;
+      y = (y / rect.height) * canvas.height;
+      
+      // 4. 경계 제한
       x = Math.max(0, Math.min(x, canvas.width));
       y = Math.max(0, Math.min(y, canvas.height));
+      
+      console.log('터치 좌표 변환:', {
+        touch: { x: touch.clientX, y: touch.clientY },
+        rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        canvas: { width: canvas.width, height: canvas.height },
+        transformed: { x, y },
+        scale,
+        pan
+      });
       
       if (isSelecting) {
         setSelection({
@@ -320,15 +374,19 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         // 선택 영역 업데이트
         const canvas = canvasRef.current;
         
-        // 터치 좌표를 캔버스 좌표로 변환
-        let x = (touch.clientX - rect.left) / rect.width * canvas.width;
-        let y = (touch.clientY - rect.top) / rect.height * canvas.height;
+        // 1. 터치 좌표를 화면 기준으로 변환
+        let x = touch.clientX - rect.left;
+        let y = touch.clientY - rect.top;
         
-        // 확대/이동 효과 제거
+        // 2. 확대/이동 효과를 제거하여 실제 캔버스 좌표 계산
         x = (x - pan.x) / scale;
         y = (y - pan.y) / scale;
         
-        // 경계 제한
+        // 3. 캔버스 크기에 맞게 정규화
+        x = (x / rect.width) * canvas.width;
+        y = (y / rect.height) * canvas.height;
+        
+        // 4. 경계 제한
         x = Math.max(0, Math.min(x, canvas.width));
         y = Math.max(0, Math.min(y, canvas.height));
         
@@ -486,38 +544,56 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         )}
         
         {/* 선택 영역 표시 */}
-        {selection && !showZoomedArea && (
-          <div
-            style={{
-              position: 'absolute',
-              left: Math.min(selection.startX, selection.endX) * scale + pan.x,
-              top: Math.min(selection.startY, selection.endY) * scale + pan.y,
-              width: Math.abs(selection.endX - selection.startX) * scale,
-              height: Math.abs(selection.endY - selection.startY) * scale,
-              border: '3px solid #00ff00',
-              backgroundColor: 'rgba(0, 255, 0, 0.3)',
-              pointerEvents: 'none',
-              boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)',
-              zIndex: 5
-            }}
-          >
-            {/* 선택 영역 크기 표시 */}
-            <div style={{
-              position: 'absolute',
-              top: '-25px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-              color: '#00ff00',
-              fontSize: '12px',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              whiteSpace: 'nowrap'
-            }}>
-              {Math.round(Math.abs(selection.endX - selection.startX))} x {Math.round(Math.abs(selection.endY - selection.startY))}
+        {selection && !showZoomedArea && (() => {
+          const rect = canvasRef.current?.getBoundingClientRect();
+          const canvas = canvasRef.current;
+          if (!rect || !canvas) return null;
+          
+          // 캔버스 좌표를 화면 좌표로 변환 (2.5배 확대 고려)
+          const displayX = Math.min(selection.startX, selection.endX) * (rect.width / canvas.width);
+          const displayY = Math.min(selection.startY, selection.endY) * (rect.height / canvas.height);
+          const displayWidth = Math.abs(selection.endX - selection.startX) * (rect.width / canvas.width);
+          const displayHeight = Math.abs(selection.endY - selection.startY) * (rect.height / canvas.height);
+          
+          // 확대/이동 효과를 적용한 최종 화면 좌표
+          const finalX = displayX * scale + pan.x;
+          const finalY = displayY * scale + pan.y;
+          const finalWidth = displayWidth * scale;
+          const finalHeight = displayHeight * scale;
+          
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: finalX,
+                top: finalY,
+                width: finalWidth,
+                height: finalHeight,
+                border: '3px solid #00ff00',
+                backgroundColor: 'rgba(0, 255, 0, 0.3)',
+                pointerEvents: 'none',
+                boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)',
+                zIndex: 5
+              }}
+            >
+              {/* 선택 영역 크기 표시 */}
+              <div style={{
+                position: 'absolute',
+                top: '-25px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                color: '#00ff00',
+                fontSize: '12px',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                whiteSpace: 'nowrap'
+              }}>
+                {Math.round(Math.abs(selection.endX - selection.startX))} x {Math.round(Math.abs(selection.endY - selection.startY))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 가이드 영역 하이라이트 제거 (수동 선택만 사용) */}
         
