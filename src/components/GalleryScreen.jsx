@@ -473,6 +473,9 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
             const rect = canvasRef.current?.getBoundingClientRect();
             const canvas = canvasRef.current;
             if (!rect || !canvas) return null;
+
+            const canvasX = canvas.offsetLeft;
+            const canvasY = canvas.offsetTop;
             
             // 캔버스 좌표를 화면 좌표로 변환
             const displayX = Math.min(selection.startX, selection.endX) * (rect.width / canvas.width);
@@ -484,15 +487,15 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               <div
                 style={{
                   position: 'absolute',
-                  left: displayX,
-                  top: displayY,
+                  left: canvasX + displayX,
+                  top: canvasY + displayY,
                   width: displayWidth,
                   height: displayHeight,
                   border: '3px solid #00ff00',
                   backgroundColor: 'rgba(0, 255, 0, 0.3)',
                   pointerEvents: 'none',
                   boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)',
-                  zIndex: 5
+                  zIndex: 10
                 }}
               >
                 {/* 선택 영역 크기 표시 */}

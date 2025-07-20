@@ -6,45 +6,40 @@ const StartScreen = ({ onStart }) => {
   const [isPWA, setIsPWA] = useState(false);
   const [debugInfo, setDebugInfo] = useState('');
   const [installStatus, setInstallStatus] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
+    console.log('StartScreen 초기화 시작');
+    
     // PWA 환경 확인
     const checkPWAEnvironment = () => {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
       const isInApp = window.navigator.standalone === true;
-      const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+      const isFullscreenMode = window.matchMedia('(display-mode: fullscreen)').matches;
       const isMinimal = window.matchMedia('(display-mode: minimal-ui)').matches;
-      setIsPWA(isStandalone || isInApp || isFullscreen || isMinimal);
+      
+      const pwaMode = isStandalone || isInApp || isFullscreenMode || isMinimal;
+      setIsPWA(pwaMode);
       
       console.log('PWA 환경 확인:', {
         isStandalone,
         isInApp,
-        isFullscreen,
+        isFullscreenMode,
         isMinimal,
+        pwaMode,
         userAgent: navigator.userAgent,
         protocol: window.location.protocol,
-        hostname: window.location.hostname,
-        pathname: window.location.pathname
+        hostname: window.location.hostname
       });
     };
 
-    checkPWAEnvironment();
-
-    // PWA 설치 이벤트 리스너
-    const handleBeforeInstallPrompt = (e) => {
-      console.log('beforeinstallprompt 이벤트 발생:', e);
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setShowInstallButton(true);
-      setDebugInfo('설치 가능: beforeinstallprompt 이벤트 수신됨');
-      setInstallStatus('ready');
-    };
-
-    // 앱이 이미 설치되었는지 확인
-    const handleAppInstalled = () => {
-      console.log('앱 설치됨');
-      setDebugInfo('앱이 설치되었습니다. 재설치도 가능합니다.');
-      setInstallStatus('installed');
+    // 전체화면 상태 확인
+    const checkFullscreenStatus = () => {
+      const fullscreenElement = document.fullscreenElement || 
+                               document.webkitFullscreenElement || 
+                               document.mozFullScreenElement || 
+                               document.msFullscreenElement;
+      setIsFullscreen(!!fullscreenElement);
     };
 
     // 매니페스트 확인
@@ -55,128 +50,113 @@ const StartScreen = ({ onStart }) => {
           const manifest = await response.json();
           console.log('매니페스트 로드 성공:', manifest);
           
-          // 매니페스트 유효성 검사
+          // 필수 필드 확인
           const requiredFields = ['name', 'short_name', 'start_url', 'display'];
           const missingFields = requiredFields.filter(field => !manifest[field]);
           
           if (missingFields.length > 0) {
-            setDebugInfo(`매니페스트 누락 필드: ${missingFields.join(', ')}`);
+            setDebugInfo(`매니페스트 누락: ${missingFields.join(', ')}`);
+            setInstallStatus('manifest-error');
           } else {
-            setDebugInfo('매니페스트 로드 성공 - 설치 준비 완료');
+            setDebugInfo('매니페스트 정상');
+            setInstallStatus('manifest-ok');
           }
         } else {
           console.error('매니페스트 로드 실패:', response.status);
           setDebugInfo(`매니페스트 로드 실패: ${response.status}`);
+          setInstallStatus('manifest-error');
         }
       } catch (error) {
         console.error('매니페스트 확인 오류:', error);
         setDebugInfo('매니페스트 확인 오류');
+        setInstallStatus('manifest-error');
       }
     };
 
+    // PWA 설치 이벤트 리스너
+    const handleBeforeInstallPrompt = (e) => {
+      console.log('beforeinstallprompt 이벤트 발생');
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallButton(true);
+      setDebugInfo('설치 가능: beforeinstallprompt 수신');
+      setInstallStatus('ready');
+    };
+
+    // 앱 설치 완료 이벤트
+    const handleAppInstalled = () => {
+      console.log('앱 설치 완료');
+      setDebugInfo('앱이 설치되었습니다');
+      setInstallStatus('installed');
+    };
+
+    // 전체화면 변경 이벤트
+    const handleFullscreenChange = () => {
+      checkFullscreenStatus();
+    };
+
+    // 초기화 실행
+    checkPWAEnvironment();
+    checkFullscreenStatus();
     checkManifest();
 
+    // 이벤트 리스너 등록
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 
-    // 모바일에서 PWA 설치 가능성 확인
-    const checkInstallability = () => {
+    // 모바일 환경에서 설치 가능성 확인 (3초 후)
+    const timer = setTimeout(() => {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const isAndroid = /Android/.test(navigator.userAgent);
-      const isChrome = /Chrome/.test(navigator.userAgent);
-      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
       const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
       
-      console.log('설치 가능성 확인:', {
-        isIOS,
-        isAndroid,
-        isChrome,
-        isSafari,
-        isSecure,
-        isPWA
-      });
-      
-      // 모바일에서 HTTPS 환경이면 설치 가능
-      if ((isIOS || isAndroid) && isSecure && !isPWA) {
+      if ((isIOS || isAndroid) && isSecure && !isPWA && !showInstallButton) {
         setShowInstallButton(true);
-        setDebugInfo('모바일 환경에서 설치 가능합니다');
+        setDebugInfo('모바일 환경에서 설치 가능');
         setInstallStatus('mobile-ready');
-      }
-    };
-
-    // 3초 후 설치 가능성 확인
-    const timer = setTimeout(() => {
-      checkInstallability();
-      
-      if (!showInstallButton && !isPWA) {
-        console.log('설치 버튼이 표시되지 않음 - 수동 옵션 제공');
-        setDebugInfo('자동 설치가 불가능합니다. 수동 설치를 시도해보세요.');
-        setInstallStatus('manual');
-        setShowInstallButton(true); // 수동 설치 버튼 표시
       }
     }, 3000);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
       clearTimeout(timer);
     };
-  }, [showInstallButton, isPWA]);
+  }, []);
 
   const handleInstallApp = async () => {
-    console.log('설치 버튼 클릭됨');
+    console.log('앱 설치 버튼 클릭');
     
     if (deferredPrompt) {
       try {
-        console.log('deferredPrompt 사용하여 설치 시작');
+        console.log('deferredPrompt로 설치 시작');
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         console.log('설치 결과:', outcome);
         
         if (outcome === 'accepted') {
-          setDebugInfo('앱 설치가 시작되었습니다');
+          setDebugInfo('앱 설치 시작됨');
           setInstallStatus('installing');
         } else {
-          setDebugInfo('설치가 취소되었습니다');
+          setDebugInfo('설치 취소됨');
           setInstallStatus('cancelled');
         }
       } catch (error) {
         console.error('설치 오류:', error);
-        setDebugInfo('설치 중 오류가 발생했습니다');
+        setDebugInfo('설치 오류 발생');
         setInstallStatus('error');
       }
     } else {
-      console.log('deferredPrompt 없음 - 브라우저별 설치 방법 안내');
-      
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isAndroid = /Android/.test(navigator.userAgent);
-      const isChrome = /Chrome/.test(navigator.userAgent);
-      const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
-      
-      if (isIOS && isSafari) {
-        // iOS Safari에서 직접 설치 시도
-        setDebugInfo('iOS Safari에서 설치 중...');
-        setInstallStatus('ios-installing');
-        
-        // iOS Safari에서는 자동 설치가 불가능하므로 가이드 표시
-        setTimeout(() => {
-          handleManualInstall();
-        }, 1000);
-      } else if (isAndroid && isChrome) {
-        // Android Chrome에서 설치 시도
-        setDebugInfo('Android Chrome에서 설치 중...');
-        setInstallStatus('android-installing');
-        
-        // Chrome에서 설치 팝업이 나타나지 않으면 수동 가이드
-        setTimeout(() => {
-          if (installStatus === 'android-installing') {
-            handleManualInstall();
-          }
-        }, 2000);
-      } else {
-        // 기타 환경에서는 수동 가이드
-        handleManualInstall();
-      }
+      console.log('deferredPrompt 없음 - 수동 설치 가이드');
+      handleManualInstall();
     }
   };
 
@@ -314,20 +294,27 @@ const StartScreen = ({ onStart }) => {
   };
 
   const requestFullscreen = () => {
+    console.log('전체화면 요청');
+    
     try {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen();
-      } else if (document.documentElement.webkitRequestFullscreen) {
-        document.documentElement.webkitRequestFullscreen();
-      } else if (document.documentElement.msRequestFullscreen) {
-        document.documentElement.msRequestFullscreen();
-      } else if (document.documentElement.mozRequestFullScreen) {
-        document.documentElement.mozRequestFullScreen();
+      const element = document.documentElement;
+      
+      if (element.requestFullscreen) {
+        element.requestFullscreen();
+      } else if (element.webkitRequestFullscreen) {
+        element.webkitRequestFullscreen();
+      } else if (element.msRequestFullscreen) {
+        element.msRequestFullscreen();
+      } else if (element.mozRequestFullScreen) {
+        element.mozRequestFullScreen();
       } else {
+        console.log('전체화면 지원 안됨');
+        setDebugInfo('전체화면 지원 안됨');
         alert('이 브라우저에서는 전체화면을 지원하지 않습니다.');
       }
     } catch (error) {
       console.error('전체화면 요청 오류:', error);
+      setDebugInfo('전체화면 오류');
       alert('전체화면 모드로 전환할 수 없습니다.');
     }
   };
@@ -400,23 +387,24 @@ const StartScreen = ({ onStart }) => {
       </div>
 
       {/* 디버그 정보 */}
-      {debugInfo && (
-        <div style={{
-          position: 'absolute',
-          top: '10px',
-          left: '10px',
-          right: '10px',
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '8px',
-          borderRadius: '4px',
-          fontSize: '12px',
-          zIndex: 100
-        }}>
-          {debugInfo}
-          {installStatus && ` (${installStatus})`}
-        </div>
-      )}
+      <div style={{
+        position: 'absolute',
+        top: '10px',
+        left: '10px',
+        right: '10px',
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        color: 'white',
+        padding: '8px',
+        borderRadius: '4px',
+        fontSize: '12px',
+        zIndex: 100
+      }}>
+        <div>매니페스트: {installStatus}</div>
+        <div>PWA 모드: {isPWA ? 'ON' : 'OFF'}</div>
+        <div>전체화면: {isFullscreen ? 'ON' : 'OFF'}</div>
+        <div>설치버튼: {showInstallButton ? 'ON' : 'OFF'}</div>
+        {debugInfo && <div>상태: {debugInfo}</div>}
+      </div>
 
       {/* 버튼 컨테이너 */}
       <div style={{
@@ -432,7 +420,6 @@ const StartScreen = ({ onStart }) => {
         {!isPWA && (
           <button
             onClick={requestFullscreen}
-            className="btn btn-primary"
             style={{
               width: '100%',
               fontSize: '14px',
@@ -445,17 +432,17 @@ const StartScreen = ({ onStart }) => {
               border: 'none',
               borderRadius: '8px',
               color: 'white',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              cursor: 'pointer'
             }}
           >
-            🖥️ 전체화면 모드
+            🖥️ {isFullscreen ? '전체화면 해제' : '전체화면 모드'}
           </button>
         )}
 
         {/* 수동 설치 가이드 버튼 */}
         <button
           onClick={handleManualInstall}
-          className="btn btn-secondary"
           style={{
             width: '100%',
             fontSize: '14px',
@@ -468,7 +455,8 @@ const StartScreen = ({ onStart }) => {
             border: 'none',
             borderRadius: '8px',
             color: 'white',
-            fontWeight: 'bold'
+            fontWeight: 'bold',
+            cursor: 'pointer'
           }}
         >
           📋 설치 가이드 보기
@@ -478,7 +466,6 @@ const StartScreen = ({ onStart }) => {
         {showInstallButton && (
           <button
             onClick={handleInstallApp}
-            className="btn btn-success"
             style={{
               width: '100%',
               fontSize: '16px',
@@ -492,7 +479,8 @@ const StartScreen = ({ onStart }) => {
               borderRadius: '8px',
               color: 'white',
               fontWeight: 'bold',
-              boxShadow: '0 4px 12px rgba(40, 167, 69, 0.3)'
+              boxShadow: '0 4px 12px rgba(40, 167, 69, 0.3)',
+              cursor: 'pointer'
             }}
           >
             📱 앱 설치하기
