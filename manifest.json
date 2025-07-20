@@ -4,19 +4,20 @@
   "description": "카메라로 제품을 촬영하고 품번을 자동으로 인식하여 재고 정리 목록을 관리하는 앱",
   "start_url": "/",
   "scope": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#f8f9fa",
   "theme_color": "#007bff",
   "orientation": "portrait",
   "categories": ["productivity", "utilities"],
   "lang": "ko",
   "dir": "ltr",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/vite.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 } 
