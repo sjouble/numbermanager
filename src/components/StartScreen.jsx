@@ -314,12 +314,21 @@ const StartScreen = ({ onStart }) => {
   };
 
   const requestFullscreen = () => {
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen();
-    } else if (document.documentElement.webkitRequestFullscreen) {
-      document.documentElement.webkitRequestFullscreen();
-    } else if (document.documentElement.msRequestFullscreen) {
-      document.documentElement.msRequestFullscreen();
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) {
+        document.documentElement.msRequestFullscreen();
+      } else if (document.documentElement.mozRequestFullScreen) {
+        document.documentElement.mozRequestFullScreen();
+      } else {
+        alert('이 브라우저에서는 전체화면을 지원하지 않습니다.');
+      }
+    } catch (error) {
+      console.error('전체화면 요청 오류:', error);
+      alert('전체화면 모드로 전환할 수 없습니다.');
     }
   };
 
@@ -409,14 +418,64 @@ const StartScreen = ({ onStart }) => {
         </div>
       )}
 
-      {/* 앱 설치 버튼 */}
-      {showInstallButton && (
-        <div style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '20px',
-          right: '20px'
-        }}>
+      {/* 버튼 컨테이너 */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        left: '20px',
+        right: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px'
+      }}>
+        {/* 전체화면 모드 버튼 */}
+        {!isPWA && (
+          <button
+            onClick={requestFullscreen}
+            className="btn btn-primary"
+            style={{
+              width: '100%',
+              fontSize: '14px',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              backgroundColor: '#007bff',
+              border: 'none',
+              borderRadius: '8px',
+              color: 'white',
+              fontWeight: 'bold'
+            }}
+          >
+            🖥️ 전체화면 모드
+          </button>
+        )}
+
+        {/* 수동 설치 가이드 버튼 */}
+        <button
+          onClick={handleManualInstall}
+          className="btn btn-secondary"
+          style={{
+            width: '100%',
+            fontSize: '14px',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            backgroundColor: '#6c757d',
+            border: 'none',
+            borderRadius: '8px',
+            color: 'white',
+            fontWeight: 'bold'
+          }}
+        >
+          📋 설치 가이드 보기
+        </button>
+
+        {/* 앱 설치 버튼 */}
+        {showInstallButton && (
           <button
             onClick={handleInstallApp}
             className="btn btn-success"
@@ -438,63 +497,8 @@ const StartScreen = ({ onStart }) => {
           >
             📱 앱 설치하기
           </button>
-        </div>
-      )}
-
-      {/* 수동 설치 가이드 버튼 - 항상 표시 */}
-      <div style={{
-        position: 'absolute',
-        bottom: '80px',
-        left: '20px',
-        right: '20px'
-      }}>
-        <button
-          onClick={handleManualInstall}
-          className="btn btn-secondary"
-          style={{
-            width: '100%',
-            fontSize: '14px',
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            backgroundColor: '#6c757d',
-            border: 'none',
-            borderRadius: '8px',
-            color: 'white',
-            fontWeight: 'bold'
-          }}
-        >
-          📋 설치 가이드 보기
-        </button>
+        )}
       </div>
-
-      {/* 전체화면 모드 버튼 */}
-      {!isPWA && (
-        <div style={{
-          position: 'absolute',
-          bottom: '140px',
-          left: '20px',
-          right: '20px'
-        }}>
-          <button
-            onClick={requestFullscreen}
-            className="btn btn-primary"
-            style={{
-              width: '100%',
-              fontSize: '14px',
-              padding: '10px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            🖥️ 전체화면 모드
-          </button>
-        </div>
-      )}
     </div>
   );
 };

@@ -399,7 +399,10 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           position: 'relative',
           width: '100%',
           height: '100%',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center'
         }}>
           <canvas
             ref={canvasRef}
@@ -414,6 +417,65 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               backgroundColor: '#f0f0f0'
             }}
           />
+          
+          {/* 선택 영역 표시 */}
+          {selection && (() => {
+            const rect = canvasRef.current?.getBoundingClientRect();
+            const canvas = canvasRef.current;
+            if (!rect || !canvas) {
+              console.log('선택 영역 표시 실패: rect 또는 canvas가 없음');
+              return null;
+            }
+            
+            console.log('선택 영역 표시:', {
+              selection,
+              rect: { width: rect.width, height: rect.height },
+              canvas: { width: canvas.width, height: canvas.height }
+            });
+            
+            // 캔버스 좌표를 화면 좌표로 변환 (1:1 매칭)
+            const displayX = Math.min(selection.startX, selection.endX) * (rect.width / canvas.width);
+            const displayY = Math.min(selection.startY, selection.endY) * (rect.height / canvas.height);
+            const displayWidth = Math.abs(selection.endX - selection.startX) * (rect.width / canvas.width);
+            const displayHeight = Math.abs(selection.endY - selection.startY) * (rect.height / canvas.height);
+            
+            console.log('변환된 좌표:', {
+              displayX, displayY, displayWidth, displayHeight
+            });
+            
+            return (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: displayX,
+                  top: displayY,
+                  width: displayWidth,
+                  height: displayHeight,
+                  border: '3px solid #00ff00',
+                  backgroundColor: 'rgba(0, 255, 0, 0.3)',
+                  pointerEvents: 'none',
+                  boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)',
+                  zIndex: 5
+                }}
+              >
+                {/* 선택 영역 크기 표시 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '-25px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                  color: '#00ff00',
+                  fontSize: '12px',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {Math.round(Math.abs(selection.endX - selection.startX))} x {Math.round(Math.abs(selection.endY - selection.startY))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
         
         {/* 이미지 로딩 상태 표시 */}
@@ -430,63 +492,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
             <p>이미지를 로드하고 있습니다...</p>
           </div>
         )}
-        
-        {/* 선택 영역 표시 */}
-        {selection && (() => {
-          const rect = canvasRef.current?.getBoundingClientRect();
-          const canvas = canvasRef.current;
-          if (!rect || !canvas) return null;
-          
-          // 캔버스 좌표를 화면 좌표로 변환 (1:1 매칭)
-          const displayX = Math.min(selection.startX, selection.endX) * (rect.width / canvas.width);
-          const displayY = Math.min(selection.startY, selection.endY) * (rect.height / canvas.height);
-          const displayWidth = Math.abs(selection.endX - selection.startX) * (rect.width / canvas.width);
-          const displayHeight = Math.abs(selection.endY - selection.startY) * (rect.height / canvas.height);
-          
-          // 최종 화면 좌표 (확대/이동 없음)
-          const finalX = displayX;
-          const finalY = displayY;
-          const finalWidth = displayWidth;
-          const finalHeight = displayHeight;
-          
-          return (
-            <div
-              style={{
-                position: 'absolute',
-                left: finalX,
-                top: finalY,
-                width: finalWidth,
-                height: finalHeight,
-                border: '3px solid #00ff00',
-                backgroundColor: 'rgba(0, 255, 0, 0.3)',
-                pointerEvents: 'none',
-                boxShadow: '0 0 10px rgba(0, 255, 0, 0.5)',
-                zIndex: 5
-              }}
-            >
-              {/* 선택 영역 크기 표시 */}
-              <div style={{
-                position: 'absolute',
-                top: '-25px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                color: '#00ff00',
-                fontSize: '12px',
-                padding: '2px 6px',
-                borderRadius: '3px',
-                whiteSpace: 'nowrap'
-              }}>
-                {Math.round(Math.abs(selection.endX - selection.startX))} x {Math.round(Math.abs(selection.endY - selection.startY))}
-              </div>
-            </div>
-          );
-        })()}
 
-        {/* 가이드 영역 하이라이트 제거 (수동 선택만 사용) */}
-        
-
-        
         {/* 선택 모드 인디케이터 */}
         {isSelecting && !selection && (
           <div style={{
