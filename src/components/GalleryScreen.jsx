@@ -7,6 +7,10 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const [isProcessing, setIsProcessing] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [showZoomedArea, setShowZoomedArea] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [formData, setFormData] = useState({
     productNumber: '',
     unit: packagingUnits[0] || '카톤',
@@ -229,6 +233,104 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     }, 500);
   };
 
+  // 터치 이벤트 핸들러
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const rect = canvasRef.current.getBoundingClientRect();
+      const x = (touch.clientX - rect.left - pan.x) / scale;
+      const y = (touch.clientY - rect.top - pan.y) / scale;
+      
+      // 선택 모드인 경우 선택 영역 시작
+      if (isSelecting) {
+        setSelection({
+          startX: x,
+          startY: y,
+          endX: x,
+          endY: y
+        });
+      } else {
+        // 드래그 모드인 경우 드래그 시작
+        setDragStart({
+          x: touch.clientX - rect.left,
+          y: touch.clientY - rect.top
+        });
+        setIsDragging(true);
+      }
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    
+    if (e.touches.length === 2) {
+      // 핀치 줌
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      
+      const distance = Math.sqrt(
+        Math.pow(touch2.clientX - touch1.clientX, 2) +
+        Math.pow(touch2.clientY - touch1.clientY, 2)
+      );
+      
+      if (this.lastDistance) {
+        const scaleChange = distance / this.lastDistance;
+        setScale(prev => Math.min(Math.max(prev * scaleChange, 0.5), 3));
+      }
+      
+      this.lastDistance = distance;
+    } else if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const rect = canvasRef.current.getBoundingClientRect();
+      
+      if (isSelecting && selection) {
+        // 선택 영역 업데이트
+        const x = (touch.clientX - rect.left - pan.x) / scale;
+        const y = (touch.clientY - rect.top - pan.y) / scale;
+        
+        setSelection({
+          ...selection,
+          endX: x,
+          endY: y
+        });
+      } else if (isDragging) {
+        // 드래그 모드
+        const currentX = touch.clientX - rect.left;
+        const currentY = touch.clientY - rect.top;
+        
+        setPan(prev => ({
+          x: prev.x + (currentX - dragStart.x),
+          y: prev.y + (currentY - dragStart.y)
+        }));
+        
+        setDragStart({ x: currentX, y: currentY });
+      }
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (e.touches.length === 0) {
+      setIsDragging(false);
+      this.lastDistance = null;
+      
+      // 선택 모드에서 터치가 끝나면 OCR 실행
+      if (isSelecting && selection) {
+        performOCR();
+      }
+    }
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale(prev => Math.min(Math.max(prev * delta, 0.5), 3));
+  };
+
+  const resetView = () => {
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+  };
+
   return (
     <div style={{
       height: '100vh',
@@ -246,13 +348,46 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         zIndex: 20
       }}>
         <h2>품번 영역 선택</h2>
-        <button
-          onClick={selectGuideArea}
-          className="btn btn-primary"
-          style={{ fontSize: '14px', padding: '8px 16px', marginTop: '8px' }}
-        >
-          가이드 영역 자동 선택
-        </button>
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          justifyContent: 'center',
+          marginTop: '8px',
+          flexWrap: 'wrap'
+        }}>
+          <button
+            onClick={selectGuideArea}
+            className="btn btn-primary"
+            style={{ fontSize: '14px', padding: '8px 16px' }}
+          >
+            가이드 영역 자동 선택
+          </button>
+          <button
+            onClick={() => {
+              setSelection(null);
+              setRecognizedText('');
+              setFormData(prev => ({ ...prev, productNumber: '' }));
+            }}
+            className="btn btn-secondary"
+            style={{ fontSize: '14px', padding: '8px 16px' }}
+          >
+            다시 선택
+          </button>
+          <button
+            onClick={resetView}
+            className="btn btn-secondary"
+            style={{ fontSize: '14px', padding: '8px 16px' }}
+          >
+            화면 초기화
+          </button>
+          <button
+            onClick={() => setIsSelecting(!isSelecting)}
+            className={isSelecting ? "btn btn-success" : "btn btn-secondary"}
+            style={{ fontSize: '14px', padding: '8px 16px' }}
+          >
+            {isSelecting ? '선택 모드 ON' : '선택 모드 OFF'}
+          </button>
+        </div>
       </div>
 
       {/* 전체 이미지 영역 */}
@@ -267,19 +402,33 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           overflow: 'hidden'
         }}
       >
-        <canvas
-          ref={canvasRef}
-          onClick={handleImageClick}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            cursor: isSelecting ? 'crosshair' : 'pointer',
-            border: '1px solid #ccc',
-            backgroundColor: '#f0f0f0'
-          }}
-        />
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          overflow: 'hidden'
+        }}>
+          <canvas
+            ref={canvasRef}
+            onClick={handleImageClick}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onWheel={handleWheel}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              cursor: isSelecting ? 'crosshair' : 'pointer',
+              border: '1px solid #ccc',
+              backgroundColor: '#f0f0f0',
+              transform: `scale(${scale}) translate(${pan.x / scale}px, ${pan.y / scale}px)`,
+              transformOrigin: 'center',
+              transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+            }}
+          />
+        </div>
         
         {/* 이미지 로딩 상태 표시 */}
         {!imageLoaded && (
@@ -301,10 +450,10 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           <div
             style={{
               position: 'absolute',
-              left: Math.min(selection.startX, selection.endX),
-              top: Math.min(selection.startY, selection.endY),
-              width: Math.abs(selection.endX - selection.startX),
-              height: Math.abs(selection.endY - selection.startY),
+              left: Math.min(selection.startX, selection.endX) * scale + pan.x,
+              top: Math.min(selection.startY, selection.endY) * scale + pan.y,
+              width: Math.abs(selection.endX - selection.startX) * scale,
+              height: Math.abs(selection.endY - selection.startY) * scale,
               border: '3px solid #00ff00',
               backgroundColor: 'rgba(0, 255, 0, 0.3)',
               pointerEvents: 'none',
@@ -319,7 +468,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
             style={{
               position: 'absolute',
               left: '50%',
-              top: '50%',
+              top: '30%',
               transform: 'translate(-50%, -50%)',
               width: '200px',
               height: '80px',

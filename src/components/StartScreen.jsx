@@ -3,38 +3,115 @@ import React, { useState, useEffect } from 'react';
 const StartScreen = ({ onStart }) => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallButton, setShowInstallButton] = useState(false);
+  const [isPWA, setIsPWA] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
+    // PWA 환경 확인
+    const checkPWAEnvironment = () => {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      const isInApp = window.navigator.standalone === true;
+      setIsPWA(isStandalone || isInApp);
+      
+      console.log('PWA 환경 확인:', {
+        isStandalone,
+        isInApp,
+        userAgent: navigator.userAgent,
+        protocol: window.location.protocol,
+        hostname: window.location.hostname
+      });
+    };
+
+    checkPWAEnvironment();
+
     // PWA 설치 이벤트 리스너
     const handleBeforeInstallPrompt = (e) => {
+      console.log('beforeinstallprompt 이벤트 발생');
       e.preventDefault();
       setDeferredPrompt(e);
       setShowInstallButton(true);
+      setDebugInfo('설치 가능: beforeinstallprompt 이벤트 수신됨');
     };
 
     // 앱이 이미 설치되었는지 확인
     const handleAppInstalled = () => {
-      setShowInstallButton(false);
-      setDeferredPrompt(null);
+      console.log('앱 설치됨');
+      // 설치 후에도 버튼을 계속 표시 (재설치 가능하도록)
+      setDebugInfo('앱이 설치되었습니다. 재설치도 가능합니다.');
     };
+
+    // 매니페스트 확인
+    const checkManifest = async () => {
+      try {
+        const response = await fetch('/manifest.json');
+        if (response.ok) {
+          const manifest = await response.json();
+          console.log('매니페스트 로드 성공:', manifest);
+          setDebugInfo('매니페스트 로드 성공');
+        } else {
+          console.error('매니페스트 로드 실패:', response.status);
+          setDebugInfo('매니페스트 로드 실패');
+        }
+      } catch (error) {
+        console.error('매니페스트 확인 오류:', error);
+        setDebugInfo('매니페스트 확인 오류');
+      }
+    };
+
+    checkManifest();
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
+    // 디버깅: 3초 후에도 설치 버튼이 안 보이면 수동 옵션 제공
+    const timer = setTimeout(() => {
+      if (!showInstallButton && !isPWA) {
+        console.log('설치 버튼이 표시되지 않음 - 수동 옵션 제공');
+        setDebugInfo('자동 설치가 불가능합니다. 수동 설치를 시도해보세요.');
+      }
+    }, 3000);
+
+    // 항상 설치 버튼 표시 (PWA 환경에서도 재설치 가능하도록)
+    setShowInstallButton(true);
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
+      clearTimeout(timer);
     };
-  }, []);
+  }, [showInstallButton, isPWA]);
 
   const handleInstallApp = async () => {
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-        setShowInstallButton(false);
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('설치 결과:', outcome);
+        if (outcome === 'accepted') {
+          setDebugInfo('앱 설치가 시작되었습니다');
+        } else {
+          setDebugInfo('설치가 취소되었습니다');
+        }
+      } catch (error) {
+        console.error('설치 오류:', error);
+        setDebugInfo('설치 중 오류가 발생했습니다');
       }
+    } else {
+      // deferredPrompt가 없는 경우 수동 설치 가이드 표시
+      handleManualInstall();
+    }
+  };
+
+  const handleManualInstall = () => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    
+    if (isIOS) {
+      alert('iOS에서 설치하려면:\n1. Safari 브라우저에서 열기\n2. 공유 버튼(□) 클릭\n3. "홈 화면에 추가" 선택');
+    } else if (isAndroid) {
+      alert('Android에서 설치하려면:\n1. Chrome 브라우저에서 열기\n2. 메뉴(⋮) 클릭\n3. "홈 화면에 추가" 선택');
+    } else {
+      alert('데스크톱에서 설치하려면:\n1. 주소창 옆의 설치 아이콘 클릭\n2. 또는 F12 → Application → Manifest에서 설치');
     }
   };
 
@@ -105,6 +182,24 @@ const StartScreen = ({ onStart }) => {
         </div>
       </div>
 
+      {/* 디버그 정보 */}
+      {debugInfo && (
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          right: '10px',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          color: 'white',
+          padding: '8px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          zIndex: 100
+        }}>
+          {debugInfo}
+        </div>
+      )}
+
       {/* 앱 설치 버튼 */}
       {showInstallButton && (
         <div style={{
@@ -127,6 +222,32 @@ const StartScreen = ({ onStart }) => {
             }}
           >
             📱 앱 설치하기
+          </button>
+        </div>
+      )}
+
+      {/* 수동 설치 옵션 - PWA 환경이 아닌 경우에만 표시 */}
+      {!isPWA && (
+        <div style={{
+          position: 'absolute',
+          bottom: '80px',
+          left: '20px',
+          right: '20px'
+        }}>
+          <button
+            onClick={handleManualInstall}
+            className="btn btn-secondary"
+            style={{
+              width: '100%',
+              fontSize: '14px',
+              padding: '10px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            📱 수동 설치 가이드
           </button>
         </div>
       )}
