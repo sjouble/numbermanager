@@ -25,6 +25,48 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       setIsSelecting(true);
     }
     
+    // 전역 마우스 이벤트 리스너 추가
+    const handleGlobalMouseMove = (e) => {
+      if (isSelecting && selection) {
+        const rect = canvasRef.current?.getBoundingClientRect();
+        const canvas = canvasRef.current;
+        
+        if (!rect || !canvas) return;
+        
+        // 마우스 좌표를 캔버스 좌표로 변환 (1:1 매칭)
+        let x = (e.clientX - rect.left);
+        let y = (e.clientY - rect.top);
+        
+        // 캔버스 크기에 맞게 정규화
+        x = (x / rect.width) * canvas.width;
+        y = (y / rect.height) * canvas.height;
+        
+        // 경계 제한
+        x = Math.max(0, Math.min(x, canvas.width));
+        y = Math.max(0, Math.min(y, canvas.height));
+        
+        console.log('전역 마우스 이동:', { x, y, selection });
+        
+        setSelection({
+          ...selection,
+          endX: x,
+          endY: y
+        });
+      }
+    };
+
+    const handleGlobalMouseUp = async () => {
+      console.log('전역 마우스 업:', { isSelecting, selection });
+      if (isSelecting && selection) {
+        setIsSelecting(false);
+        await performOCR();
+      }
+    };
+
+    // 전역 이벤트 리스너 등록
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+    
     if (image && canvasRef.current) {
       const img = new Image();
       
@@ -83,9 +125,17 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       console.log('이미지 또는 캔버스가 없습니다');
       setImageLoaded(false);
     }
-  }, [image]);
+
+    // cleanup 함수
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [image, isSelecting, selection]);
 
   const handleImageClick = (e) => {
+    console.log('이미지 클릭:', { isSelecting });
+    
     if (!isSelecting) {
       setIsSelecting(true);
       const rect = canvasRef.current.getBoundingClientRect();
@@ -102,6 +152,14 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       // 경계 제한
       x = Math.max(0, Math.min(x, canvas.width));
       y = Math.max(0, Math.min(y, canvas.height));
+      
+      console.log('클릭 좌표 변환:', {
+        clientX: e.clientX, clientY: e.clientY,
+        rectLeft: rect.left, rectTop: rect.top,
+        rectWidth: rect.width, rectHeight: rect.height,
+        canvasWidth: canvas.width, canvasHeight: canvas.height,
+        finalX: x, finalY: y
+      });
       
       setSelection({
         startX: x,
@@ -129,6 +187,8 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       x = Math.max(0, Math.min(x, canvas.width));
       y = Math.max(0, Math.min(y, canvas.height));
       
+      console.log('마우스 이동:', { x, y, selection });
+      
       setSelection({
         ...selection,
         endX: x,
@@ -138,6 +198,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   };
 
   const handleMouseUp = async () => {
+    console.log('마우스 업:', { isSelecting, selection });
     if (isSelecting && selection) {
       setIsSelecting(false);
       await performOCR();
@@ -407,8 +468,6 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           <canvas
             ref={canvasRef}
             onClick={handleImageClick}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
@@ -443,14 +502,18 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
               displayX, displayY, displayWidth, displayHeight
             });
             
+            // 최소 크기 보장
+            const minWidth = Math.max(displayWidth, 10);
+            const minHeight = Math.max(displayHeight, 10);
+            
             return (
               <div
                 style={{
                   position: 'absolute',
                   left: displayX,
                   top: displayY,
-                  width: displayWidth,
-                  height: displayHeight,
+                  width: minWidth,
+                  height: minHeight,
                   border: '3px solid #00ff00',
                   backgroundColor: 'rgba(0, 255, 0, 0.3)',
                   pointerEvents: 'none',
@@ -492,6 +555,22 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
             <p>이미지를 로드하고 있습니다...</p>
           </div>
         )}
+
+        {/* 디버그 정보 */}
+        <div style={{
+          position: 'absolute',
+          top: '10px',
+          left: '10px',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          padding: '8px',
+          borderRadius: '4px',
+          fontSize: '12px',
+          zIndex: 20
+        }}>
+          isSelecting: {isSelecting ? 'true' : 'false'}<br/>
+          selection: {selection ? `${Math.round(selection.startX)},${Math.round(selection.startY)} → ${Math.round(selection.endX)},${Math.round(selection.endY)}` : 'null'}
+        </div>
 
         {/* 선택 모드 인디케이터 */}
         {isSelecting && !selection && (
