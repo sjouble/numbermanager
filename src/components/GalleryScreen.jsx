@@ -5,11 +5,6 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   const [selection, setSelection] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
-  const [showZoomedArea, setShowZoomedArea] = useState(false);
-  const [scale, setScale] = useState(2.5);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [formData, setFormData] = useState({
     productNumber: '',
     unit: packagingUnits[0] || '카톤',
@@ -96,9 +91,9 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 클릭 좌표를 캔버스 좌표로 변환 (단순화된 정확한 계산)
-      let x = (e.clientX - rect.left - pan.x) / scale;
-      let y = (e.clientY - rect.top - pan.y) / scale;
+      // 클릭 좌표를 캔버스 좌표로 변환 (1:1 매칭)
+      let x = (e.clientX - rect.left);
+      let y = (e.clientY - rect.top);
       
       // 캔버스 크기에 맞게 정규화
       x = (x / rect.width) * canvas.width;
@@ -122,9 +117,9 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 마우스 좌표를 캔버스 좌표로 변환 (단순화된 정확한 계산)
-      let x = (e.clientX - rect.left - pan.x) / scale;
-      let y = (e.clientY - rect.top - pan.y) / scale;
+      // 마우스 좌표를 캔버스 좌표로 변환 (1:1 매칭)
+      let x = (e.clientX - rect.left);
+      let y = (e.clientY - rect.top);
       
       // 캔버스 크기에 맞게 정규화
       x = (x / rect.width) * canvas.width;
@@ -289,131 +284,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
   // 가이드 영역 자동 선택 함수 제거 (수동 선택만 사용)
 
   // 터치 이벤트 핸들러
-  const handleTouchStart = (e) => {
-    if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      const rect = canvasRef.current.getBoundingClientRect();
-      const canvas = canvasRef.current;
-      
-      // 터치 좌표를 캔버스 좌표로 변환 (단순화된 정확한 계산)
-      let x = (touch.clientX - rect.left - pan.x) / scale;
-      let y = (touch.clientY - rect.top - pan.y) / scale;
-      
-      // 캔버스 크기에 맞게 정규화
-      x = (x / rect.width) * canvas.width;
-      y = (y / rect.height) * canvas.height;
-      
-      // 경계 제한
-      x = Math.max(0, Math.min(x, canvas.width));
-      y = Math.max(0, Math.min(y, canvas.height));
-      
-      console.log('터치 좌표 변환:', {
-        touch: { x: touch.clientX, y: touch.clientY },
-        rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-        canvas: { width: canvas.width, height: canvas.height },
-        transformed: { x, y },
-        scale,
-        pan
-      });
-      
-      if (isSelecting) {
-        setSelection({
-          startX: x,
-          startY: y,
-          endX: x,
-          endY: y
-        });
-      } else {
-        setDragStart({
-          x: touch.clientX - rect.left,
-          y: touch.clientY - rect.top
-        });
-        setIsDragging(true);
-      }
-    }
-  };
 
-  const handleTouchMove = (e) => {
-    e.preventDefault();
-    
-    if (e.touches.length === 2) {
-      // 핀치 줌
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      
-      const distance = Math.sqrt(
-        Math.pow(touch2.clientX - touch1.clientX, 2) +
-        Math.pow(touch2.clientY - touch1.clientY, 2)
-      );
-      
-      if (this.lastDistance) {
-        const scaleChange = distance / this.lastDistance;
-        setScale(prev => Math.min(Math.max(prev * scaleChange, 0.5), 5));
-      }
-      
-      this.lastDistance = distance;
-    } else if (e.touches.length === 1) {
-      const touch = e.touches[0];
-      const rect = canvasRef.current.getBoundingClientRect();
-      
-      if (isSelecting && selection) {
-        // 선택 영역 업데이트
-        const canvas = canvasRef.current;
-        
-        // 터치 좌표를 캔버스 좌표로 변환 (단순화된 정확한 계산)
-        let x = (touch.clientX - rect.left - pan.x) / scale;
-        let y = (touch.clientY - rect.top - pan.y) / scale;
-        
-        // 캔버스 크기에 맞게 정규화
-        x = (x / rect.width) * canvas.width;
-        y = (y / rect.height) * canvas.height;
-        
-        // 경계 제한
-        x = Math.max(0, Math.min(x, canvas.width));
-        y = Math.max(0, Math.min(y, canvas.height));
-        
-        setSelection({
-          ...selection,
-          endX: x,
-          endY: y
-        });
-      } else if (isDragging) {
-        // 드래그 모드
-        const currentX = touch.clientX - rect.left;
-        const currentY = touch.clientY - rect.top;
-        
-        setPan(prev => ({
-          x: prev.x + (currentX - dragStart.x),
-          y: prev.y + (currentY - dragStart.y)
-        }));
-        
-        setDragStart({ x: currentX, y: currentY });
-      }
-    }
-  };
-
-  const handleTouchEnd = (e) => {
-    if (e.touches.length === 0) {
-      setIsDragging(false);
-      this.lastDistance = null;
-      
-      // 선택 모드에서 터치가 끝나면 선택 완료 (OCR은 버튼으로 실행)
-      if (isSelecting && selection) {
-        console.log('영역 선택 완료:', selection);
-      }
-    }
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setScale(prev => Math.min(Math.max(prev * delta, 0.5), 5));
-  };
-
-  const resetView = () => {
-    setScale(2.5);
-    setPan({ x: 0, y: 0 });
-  };
 
   // 대체 OCR 함수 (PaddleOCR 실패 시 사용)
   const performFallbackOCR = async () => {
@@ -535,19 +406,12 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
             onClick={handleImageClick}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onWheel={handleWheel}
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
               cursor: isSelecting ? 'crosshair' : 'pointer',
               border: '1px solid #ccc',
-              backgroundColor: '#f0f0f0',
-              transform: `scale(${scale}) translate(${pan.x / scale}px, ${pan.y / scale}px)`,
-              transformOrigin: 'center',
-              transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+              backgroundColor: '#f0f0f0'
             }}
           />
         </div>
@@ -568,22 +432,22 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
         )}
         
         {/* 선택 영역 표시 */}
-        {selection && !showZoomedArea && (() => {
+        {selection && (() => {
           const rect = canvasRef.current?.getBoundingClientRect();
           const canvas = canvasRef.current;
           if (!rect || !canvas) return null;
           
-          // 캔버스 좌표를 화면 좌표로 변환 (단순화된 계산)
+          // 캔버스 좌표를 화면 좌표로 변환 (1:1 매칭)
           const displayX = Math.min(selection.startX, selection.endX) * (rect.width / canvas.width);
           const displayY = Math.min(selection.startY, selection.endY) * (rect.height / canvas.height);
           const displayWidth = Math.abs(selection.endX - selection.startX) * (rect.width / canvas.width);
           const displayHeight = Math.abs(selection.endY - selection.startY) * (rect.height / canvas.height);
           
-          // 확대/이동 효과를 적용한 최종 화면 좌표
-          const finalX = displayX * scale + pan.x;
-          const finalY = displayY * scale + pan.y;
-          const finalWidth = displayWidth * scale;
-          const finalHeight = displayHeight * scale;
+          // 최종 화면 좌표 (확대/이동 없음)
+          const finalX = displayX;
+          const finalY = displayY;
+          const finalWidth = displayWidth;
+          const finalHeight = displayHeight;
           
           return (
             <div
@@ -621,75 +485,7 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
 
         {/* 가이드 영역 하이라이트 제거 (수동 선택만 사용) */}
         
-        {/* 확대된 영역 표시 */}
-        {showZoomedArea && selection && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10
-          }}>
-            <div style={{
-              position: 'relative',
-              width: '80%',
-              height: '60%',
-              border: '3px solid #00ff00',
-              borderRadius: '8px',
-              overflow: 'hidden'
-            }}>
-              <canvas
-                ref={canvasRef}
-                onClick={handleImageClick}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  transform: 'scale(2)',
-                  transformOrigin: 'center',
-                  cursor: isSelecting ? 'crosshair' : 'pointer'
-                }}
-              />
-              <div style={{
-                position: 'absolute',
-                top: '10px',
-                left: '10px',
-                color: '#00ff00',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                backgroundColor: 'rgba(0,0,0,0.7)',
-                padding: '4px 8px',
-                borderRadius: '4px'
-              }}>
-                2배 확대된 품번 영역
-              </div>
-              <button
-                onClick={() => setShowZoomedArea(false)}
-                style={{
-                  position: 'absolute',
-                  top: '10px',
-                  right: '10px',
-                  background: 'rgba(255,255,255,0.9)',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '30px',
-                  height: '30px',
-                  fontSize: '16px',
-                  cursor: 'pointer'
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
+
         
         {/* 선택 모드 인디케이터 */}
         {isSelecting && !selection && (
