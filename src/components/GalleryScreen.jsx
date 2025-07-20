@@ -97,19 +97,17 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 캔버스의 실제 크기와 표시 크기 비율 계산
-      const displayWidth = rect.width;
-      const displayHeight = rect.height;
-      const actualWidth = canvas.width;
-      const actualHeight = canvas.height;
-      
       // 클릭 좌표를 캔버스 좌표로 변환
-      let x = (e.clientX - rect.left) / displayWidth * actualWidth;
-      let y = (e.clientY - rect.top) / displayHeight * actualHeight;
+      let x = (e.clientX - rect.left) / rect.width * canvas.width;
+      let y = (e.clientY - rect.top) / rect.height * canvas.height;
       
-      // 확대/이동 적용
+      // 확대/이동 효과 제거
       x = (x - pan.x) / scale;
       y = (y - pan.y) / scale;
+      
+      // 경계 제한
+      x = Math.max(0, Math.min(x, canvas.width));
+      y = Math.max(0, Math.min(y, canvas.height));
       
       setSelection({
         startX: x,
@@ -125,19 +123,17 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       const rect = canvasRef.current.getBoundingClientRect();
       const canvas = canvasRef.current;
       
-      // 캔버스의 실제 크기와 표시 크기 비율 계산
-      const displayWidth = rect.width;
-      const displayHeight = rect.height;
-      const actualWidth = canvas.width;
-      const actualHeight = canvas.height;
-      
       // 마우스 좌표를 캔버스 좌표로 변환
-      let x = (e.clientX - rect.left) / displayWidth * actualWidth;
-      let y = (e.clientY - rect.top) / displayHeight * actualHeight;
+      let x = (e.clientX - rect.left) / rect.width * canvas.width;
+      let y = (e.clientY - rect.top) / rect.height * canvas.height;
       
-      // 확대/이동 적용
+      // 확대/이동 효과 제거
       x = (x - pan.x) / scale;
       y = (y - pan.y) / scale;
+      
+      // 경계 제한
+      x = Math.max(0, Math.min(x, canvas.width));
+      y = Math.max(0, Math.min(y, canvas.height));
       
       setSelection({
         ...selection,
@@ -161,34 +157,65 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     
     try {
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
       
       // 선택 영역 계산
-      const startX = Math.min(selection.startX, selection.endX);
-      const startY = Math.min(selection.startY, selection.endY);
-      const width = Math.abs(selection.endX - selection.startX);
-      const height = Math.abs(selection.endY - selection.startY);
+      const startX = Math.max(0, Math.min(selection.startX, selection.endX));
+      const startY = Math.max(0, Math.min(selection.startY, selection.endY));
+      const endX = Math.min(canvas.width, Math.max(selection.startX, selection.endX));
+      const endY = Math.min(canvas.height, Math.max(selection.startY, selection.endY));
+      const width = endX - startX;
+      const height = endY - startY;
       
-      // 선택 영역을 새로운 캔버스에 복사
+      // 최소 크기 보장
+      const finalWidth = Math.max(width, 50);
+      const finalHeight = Math.max(height, 20);
+      
+      // 선택 영역을 새로운 캔버스에 복사 (2배 해상도)
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
+      tempCanvas.width = finalWidth * 2;
+      tempCanvas.height = finalHeight * 2;
       const tempCtx = tempCanvas.getContext('2d');
       
+      tempCtx.imageSmoothingEnabled = false;
       tempCtx.drawImage(
         canvas,
-        startX, startY, width, height,
-        0, 0, width, height
+        startX, startY, finalWidth, finalHeight,
+        0, 0, finalWidth * 2, finalHeight * 2
       );
       
-      // OCR 워커 생성 및 실행
+      // 대비 향상
+      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      const data = imageData.data;
+      
+      for (let i = 0; i < data.length; i += 4) {
+        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        const enhanced = Math.max(0, Math.min(255, (gray - 128) * 1.5 + 128));
+        data[i] = enhanced;
+        data[i + 1] = enhanced;
+        data[i + 2] = enhanced;
+      }
+      
+      tempCtx.putImageData(imageData, 0, 0);
+      
+      // OCR 실행
       const worker = await createWorker('kor+eng');
+      await worker.setParameters({
+        tessedit_char_whitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz가나다라마바사아자차카타파하거너더러머버서어저처커터퍼허기니디리미비시이지치키티피히구누두루무부수우주추쿠투푸후그느드르므브스으즈츠크트프흐',
+        tessedit_pageseg_mode: '7',
+        tessedit_ocr_engine_mode: '3'
+      });
       
       const { data: { text } } = await worker.recognize(tempCanvas);
       
-      // 숫자만 추출
-      const numbers = text.match(/\d+/g);
-      const recognizedNumber = numbers ? numbers.join('') : '';
+      // 텍스트 정제 및 숫자 추출
+      let cleanedText = text.replace(/[^\w가-힣]/g, '');
+      const numbers = cleanedText.match(/\d+/g);
+      
+      let recognizedNumber = '';
+      if (numbers && numbers.length > 0) {
+        recognizedNumber = numbers.reduce((longest, current) => 
+          current.length > longest.length ? current : longest, '');
+      }
       
       setRecognizedText(text);
       setFormData(prev => ({
@@ -235,23 +262,20 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       const rect = canvasRef.current.getBoundingClientRect();
-      
-      // 캔버스의 실제 크기와 표시 크기 비율 계산
       const canvas = canvasRef.current;
-      const displayWidth = rect.width;
-      const displayHeight = rect.height;
-      const actualWidth = canvas.width;
-      const actualHeight = canvas.height;
       
       // 터치 좌표를 캔버스 좌표로 변환
-      let x = (touch.clientX - rect.left) / displayWidth * actualWidth;
-      let y = (touch.clientY - rect.top) / displayHeight * actualHeight;
+      let x = (touch.clientX - rect.left) / rect.width * canvas.width;
+      let y = (touch.clientY - rect.top) / rect.height * canvas.height;
       
-      // 확대/이동 적용
+      // 확대/이동 효과 제거
       x = (x - pan.x) / scale;
       y = (y - pan.y) / scale;
       
-      // 선택 모드인 경우 선택 영역 시작
+      // 경계 제한
+      x = Math.max(0, Math.min(x, canvas.width));
+      y = Math.max(0, Math.min(y, canvas.height));
+      
       if (isSelecting) {
         setSelection({
           startX: x,
@@ -260,7 +284,6 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
           endY: y
         });
       } else {
-        // 드래그 모드인 경우 드래그 시작
         setDragStart({
           x: touch.clientX - rect.left,
           y: touch.clientY - rect.top
@@ -295,20 +318,19 @@ const GalleryScreen = ({ image, onAddItem, onBackToCamera, packagingUnits }) => 
       
       if (isSelecting && selection) {
         // 선택 영역 업데이트
-        // 캔버스의 실제 크기와 표시 크기 비율 계산
         const canvas = canvasRef.current;
-        const displayWidth = rect.width;
-        const displayHeight = rect.height;
-        const actualWidth = canvas.width;
-        const actualHeight = canvas.height;
         
         // 터치 좌표를 캔버스 좌표로 변환
-        let x = (touch.clientX - rect.left) / displayWidth * actualWidth;
-        let y = (touch.clientY - rect.top) / displayHeight * actualHeight;
+        let x = (touch.clientX - rect.left) / rect.width * canvas.width;
+        let y = (touch.clientY - rect.top) / rect.height * canvas.height;
         
-        // 확대/이동 적용
+        // 확대/이동 효과 제거
         x = (x - pan.x) / scale;
         y = (y - pan.y) / scale;
+        
+        // 경계 제한
+        x = Math.max(0, Math.min(x, canvas.width));
+        y = Math.max(0, Math.min(y, canvas.height));
         
         setSelection({
           ...selection,
